@@ -1,0 +1,90 @@
+{
+  "name": "framekit",
+  "version": "0.1.0",
+  "private": true,
+  "description": "FrameKit - a cross-platform toolkit for video editors and post-production artists.",
+  "main": "out/main/index.js",
+  "author": "FrameKit",
+  "license": "MIT",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "start": "electron-vite preview",
+    "typecheck": "tsc --noEmit",
+    "build": "npm run typecheck && electron-vite build",
+    "dist": "npm run build && electron-builder",
+    "dist:win": "npm run build && electron-builder --win",
+    "dist:mac": "npm run build && electron-builder --mac",
+    "demo": "tsx scripts/demo-server.ts",
+    "test:parser": "tsx scripts/parser-smoke.ts",
+    "test:deep": "esbuild scripts/deep-smoke.ts --bundle --platform=node --format=cjs --external:electron --outfile=.tmp/deep-smoke.cjs && electron .tmp/deep-smoke.cjs",
+    "test:ui": "tsx scripts/ui-smoke.ts",
+    "test:download": "tsx scripts/download-smoke.ts"
+  },
+  "dependencies": {
+    "cheerio": "^1.2.0",
+    "lucide-react": "^1.73.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.3.0",
+    "electron": "^45.3.3",
+    "electron-builder": "^26.18.0",
+    "electron-vite": "^6.0.0",
+    "esbuild": "^0.28.2",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.8"
+  },
+  "build": {
+    "appId": "com.framekit.desktop",
+    "productName": "FrameKit",
+    "asar": true,
+    "directories": {
+      "output": "release",
+      "buildResources": "assets"
+    },
+    "files": [
+      "out/**/*",
+      "package.json"
+    ],
+    "win": {
+      "icon": "assets/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "FrameKit-${version}-Windows-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "FrameKit"
+    },
+    "mac": {
+      "icon": "assets/icon.png",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "category": "public.app-category.video",
+      "artifactName": "FrameKit-${version}-macOS-${arch}.${ext}"
+    },
+    "dmg": {
+      "title": "FrameKit ${version}"
+    }
+  }
+}
