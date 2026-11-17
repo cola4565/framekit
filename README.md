@@ -10,6 +10,15 @@
 
 ![FrameKit 下载队列](docs/screenshot-downloads.png)
 
+## 下载
+
+- [FrameKit 1.0.0 · Windows x64 安装包](https://github.com/cola4565/framekit/releases/download/v1.0.0/FrameKit-1.0.0-Windows-x64.exe)
+- [FrameKit 1.0.0 · macOS Apple Silicon](https://github.com/cola4565/framekit/releases/download/v1.0.0/FrameKit-1.0.0-macOS-arm64.dmg)
+- [FrameKit 1.0.0 · macOS Intel](https://github.com/cola4565/framekit/releases/download/v1.0.0/FrameKit-1.0.0-macOS-x64.dmg)
+- [全部版本与更新说明](https://github.com/cola4565/framekit/releases)
+
+安装包暂未配置商业代码签名证书，首次运行时系统可能提示未知开发者。
+
 ## 当前能力
 
 - **快速扫描**：读取页面 HTML，解析 `img`、`srcset`、`picture`、`video`、`audio`、`a`、`link`、Open Graph、Twitter Card、JSON-LD、内联脚本与 CSS 背景图。
