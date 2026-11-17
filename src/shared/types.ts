@@ -97,8 +97,23 @@ export interface StartDownloadsResult {
   destination: string
 }
 
+export interface UpdateCheckResult {
+  currentVersion: string
+  latestVersion: string
+  releaseTag: string
+  releaseName: string
+  releaseNotes: string
+  releaseUrl: string
+  publishedAt: string
+  hasUpdate: boolean
+  downloadUrl: string | null
+  downloadName: string | null
+}
+
 export interface FramekitApi {
   platform: NodeJS.Platform
+  getAppVersion: () => Promise<string>
+  checkForUpdates: () => Promise<UpdateCheckResult>
   parsePage: (url: string, options: ParseOptions) => Promise<ParseResult>
   onParseProgress: (callback: (progress: ParseProgress) => void) => () => void
   chooseDirectory: () => Promise<string | null>

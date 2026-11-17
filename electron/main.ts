@@ -13,6 +13,7 @@ import type { MenuItemConstructorOptions } from 'electron'
 import type { DownloadRequest, ParseOptions } from '../src/shared/types'
 import { DownloadManager } from './downloader'
 import { parsePage } from './parser'
+import { checkForUpdates } from './updater'
 
 const isMac = process.platform === 'darwin'
 let mainWindow: BrowserWindow | null = null
@@ -137,6 +138,10 @@ function buildMenu(): void {
 }
 
 function registerIpc(): void {
+  ipcMain.handle('app:get-version', async () => app.getVersion())
+
+  ipcMain.handle('updates:check', async () => checkForUpdates(app.getVersion()))
+
   ipcMain.handle('parse:page', async (event, rawUrl: unknown, rawOptions: unknown) => {
     if (typeof rawUrl !== 'string') throw new Error('网址参数无效')
     const options: ParseOptions = {

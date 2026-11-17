@@ -4,6 +4,8 @@
 
 支持 Windows 与 macOS，基于 Electron + React + TypeScript 构建，解析与下载全部在本机完成。
 
+当前正式版：**v1.0.0**
+
 ![FrameKit 素材解析界面](docs/screenshot-results.png)
 
 ![FrameKit 下载队列](docs/screenshot-downloads.png)
@@ -15,6 +17,7 @@
 - **统一资源库**：按图片、视频、音频、其他分类；支持搜索、筛选、尺寸/时长/体积/MIME 展示。
 - **内置预览**：图片、视频、音频和流媒体清单说明；支持复制直链和浏览器打开。
 - **批量下载**：多选、队列并发、实时速度与进度、取消、文件名去重、Content-Disposition 文件名、`.part` 临时文件。
+- **应用内更新检查**：右上角“检查更新”读取 GitHub 最新正式版，比较版本并直达对应平台的安装包。
 - **跨平台打包**：Windows NSIS 安装包与 macOS DMG 配置；应用图标已生成。
 
 > 请只下载和使用你有权访问、保存的内容，并遵守目标网站的服务条款与版权要求。
@@ -26,6 +29,7 @@
 3. 默认使用“快速扫描”；如果页面由 JavaScript 动态加载，切换到“深度嗅探”。
 4. 在结果中筛选、预览、勾选素材，然后下载。
 5. 下载进度和文件位置在右上角“下载队列”中查看。
+6. 点击右上角“检查更新”，可查看 GitHub 上的最新正式版与更新说明。
 
 ### 深度嗅探说明
 
@@ -75,6 +79,9 @@ npm run test:parser
 # 多文件下载、进度回调、Content-Disposition 文件名
 npm run test:download
 
+# 版本号归一化、语义化版本比较、预发布版本排序
+npm run test:update
+
 # 动态资源嗅探（需要 Electron 图形环境）
 npm run test:deep
 ```
@@ -112,11 +119,27 @@ npm run dist:mac
 
 macOS 的 DMG 打包、签名与公证需要在 macOS 上完成。当前配置未包含 Apple Developer 签名证书；正式分发前需配置 `CSC_LINK`、`CSC_KEY_PASSWORD` 与公证凭据。
 
+## 发布与更新
+
+应用通过 GitHub Releases API 读取仓库的 `latest` 正式版，不依赖私有服务器。
+
+发布新正式版的流程：
+
+1. 更新版本号：`npm version 1.0.1 --no-git-tag-version`
+2. 提交代码并推送。
+3. 在本机构建 Windows 安装包：`npm run dist:win`。
+4. 创建并推送 `v1.0.1` 标签，或先在 GitHub 创建同标签的 Release，并手动上传 Windows 安装包。
+5. `.github/workflows/release.yml` 会在 macOS 上构建 DMG 并上传到对应 Release，也可在 Actions 页面手动触发。
+6. 客户端点击“检查更新”即可发现新版本并打开安装包下载。
+
+更新检查只读取公开的 Release 元数据，不会上传任何本地素材、网址或使用记录。
+
 ## 架构
 
 ```text
 electron/
   main.ts          主进程、窗口、菜单、IPC 注册
+  updater.ts       GitHub Releases 版本检查与平台安装包选择
   parser.ts        快速扫描与深度嗅探的编排、结果合并
   extractor.ts     静态 HTML/CSS/脚本/元数据解析
   sniffer.ts       隐藏浏览器、DOM 快照、网络请求捕获
@@ -124,8 +147,8 @@ electron/
   preload.ts       受限 IPC API 暴露
 src/
   App.tsx          主界面与交互状态
-  components/      资源卡片、预览、下载抽屉、侧栏
-  shared/          跨进程类型与格式化工具
+  components/      资源卡片、预览、下载抽屉、更新弹窗、侧栏
+  shared/          跨进程类型、版本比较与格式化工具
 scripts/           解析、下载、动态嗅探、UI 自动化测试
 assets/            应用图标
 docs/              界面截图

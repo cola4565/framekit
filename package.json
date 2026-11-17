@@ -1,6 +1,6 @@
 {
   "name": "framekit",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "FrameKit - a cross-platform toolkit for video editors and post-production artists.",
   "main": "out/main/index.js",
@@ -16,6 +16,7 @@
     "dist:mac": "npm run build && electron-builder --mac",
     "demo": "tsx scripts/demo-server.ts",
     "test:parser": "tsx scripts/parser-smoke.ts",
+    "test:update": "tsx scripts/update-smoke.ts",
     "test:deep": "esbuild scripts/deep-smoke.ts --bundle --platform=node --format=cjs --external:electron --outfile=.tmp/deep-smoke.cjs && electron .tmp/deep-smoke.cjs",
     "test:ui": "tsx scripts/ui-smoke.ts",
     "test:download": "tsx scripts/download-smoke.ts"

@@ -6,11 +6,14 @@ import type {
   ParseOptions,
   ParseProgress,
   ParseResult,
-  StartDownloadsResult
+  StartDownloadsResult,
+  UpdateCheckResult
 } from '../src/shared/types'
 
 const api: FramekitApi = {
   platform: process.platform,
+  getAppVersion: (): Promise<string> => ipcRenderer.invoke('app:get-version'),
+  checkForUpdates: (): Promise<UpdateCheckResult> => ipcRenderer.invoke('updates:check'),
   parsePage: (url: string, options: ParseOptions): Promise<ParseResult> =>
     ipcRenderer.invoke('parse:page', url, options),
   onParseProgress: (callback: (progress: ParseProgress) => void) => {

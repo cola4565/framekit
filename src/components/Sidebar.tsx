@@ -5,7 +5,7 @@ import {
   Image,
   Layers,
   Music,
-  Settings,
+  RefreshCw,
   ShieldCheck
 } from 'lucide-react'
 
@@ -52,7 +52,12 @@ const tools: ToolItem[] = [
   }
 ]
 
-export default function Sidebar(): React.JSX.Element {
+interface SidebarProps {
+  version: string
+  onCheckUpdates: () => void
+}
+
+export default function Sidebar({ version, onCheckUpdates }: SidebarProps): React.JSX.Element {
   return (
     <aside className="sidebar">
       <div className="sidebar-section-label">TOOLKIT</div>
@@ -88,14 +93,19 @@ export default function Sidebar(): React.JSX.Element {
             <span>资源不经过云端中转</span>
           </div>
         </div>
-        <button type="button" className="nav-item compact" disabled title="设置即将上线">
+        <button
+          type="button"
+          className="nav-item compact is-action"
+          onClick={onCheckUpdates}
+          title="检查更新"
+        >
           <span className="nav-icon">
-            <Settings size={17} strokeWidth={1.8} />
+            <RefreshCw size={16} strokeWidth={1.8} />
           </span>
           <span className="nav-copy">
-            <span className="nav-label">设置</span>
+            <span className="nav-label">关于与更新</span>
           </span>
-          <span className="version-tag">v0.1</span>
+          <span className="version-tag">v{version || '1.0.0'}</span>
         </button>
       </div>
     </aside>

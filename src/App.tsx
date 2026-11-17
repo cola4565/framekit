@@ -23,12 +23,14 @@ import EmptyState from './components/EmptyState'
 import PreviewModal from './components/PreviewModal'
 import ResourceCard from './components/ResourceCard'
 import Sidebar from './components/Sidebar'
+import UpdateModal from './components/UpdateModal'
 import type {
   DownloadProgress,
   MediaResource,
   ParseProgress,
   ParseResult,
-  ResourceKind
+  ResourceKind,
+  UpdateCheckResult
 } from './shared/types'
 import {
   formatBytes,
@@ -89,6 +91,11 @@ export default function App(): React.JSX.Element {
   const [queueOpen, setQueueOpen] = useState(false)
   const [downloads, setDownloads] = useState<DownloadProgress[]>([])
   const [toast, setToast] = useState<ToastState | null>(null)
+  const [appVersion, setAppVersion] = useState('')
+  const [updateOpen, setUpdateOpen] = useState(false)
+  const [updateChecking, setUpdateChecking] = useState(false)
+  const [updateResult, setUpdateResult] = useState<UpdateCheckResult | null>(null)
+  const [updateError, setUpdateError] = useState<string | null>(null)
   const toastTimer = useRef<number | null>(null)
   const toastId = useRef(0)
 
@@ -102,6 +109,21 @@ export default function App(): React.JSX.Element {
   useEffect(() => {
     return () => {
       if (toastTimer.current) window.clearTimeout(toastTimer.current)
+    }
+  }, [])
+
+  useEffect(() => {
+    let active = true
+    void window.framekit
+      .getAppVersion()
+      .then((version) => {
+        if (active) setAppVersion(version)
+      })
+      .catch(() => {
+        if (active) setAppVersion('1.0.0')
+      })
+    return () => {
+      active = false
     }
   }, [])
 
@@ -186,6 +208,22 @@ export default function App(): React.JSX.Element {
       notify(errorMessage(pasteError), 'error')
     }
   }
+
+  const handleCheckUpdates = useCallback(async (): Promise<void> => {
+    setUpdateOpen(true)
+    setUpdateChecking(true)
+    setUpdateError(null)
+    try {
+      const info = await window.framekit.checkForUpdates()
+      setUpdateResult(info)
+      if (info.hasUpdate) notify(`发现新版本 v${info.latestVersion}`, 'success')
+    } catch (checkError) {
+      setUpdateResult(null)
+      setUpdateError(errorMessage(checkError))
+    } finally {
+      setUpdateChecking(false)
+    }
+  }, [notify])
 
   const toggleResource = (id: string): void => {
     setSelected((current) => {
@@ -328,6 +366,17 @@ export default function App(): React.JSX.Element {
         <div className="appbar-actions">
           <button
             type="button"
+            className={`appbar-button update-check-button${updateResult?.hasUpdate ? ' has-update' : ''}`}
+            onClick={() => void handleCheckUpdates()}
+            title="检查 GitHub 上的最新正式版"
+          >
+            <RefreshCw size={15} className={updateChecking ? 'spin' : ''} />
+            <span>
+              {updateResult?.hasUpdate ? `v${updateResult.latestVersion} 可用` : '检查更新'}
+            </span>
+          </button>
+          <button
+            type="button"
             className="appbar-button destination-top"
             onClick={() => void chooseDirectory()}
             title={destination || '选择素材保存目录'}
@@ -348,7 +397,7 @@ export default function App(): React.JSX.Element {
       </header>
 
       <div className="workspace">
-        <Sidebar />
+        <Sidebar version={appVersion} onCheckUpdates={() => void handleCheckUpdates()} />
 
         <main className="main-content">
           <section className={`hero${result ? ' is-compact' : ''}`}>
@@ -754,6 +803,22 @@ export default function App(): React.JSX.Element {
           }}
           onCopy={(resource) => void copyResource(resource)}
           onOpenExternal={(targetUrl) => void openExternal(targetUrl)}
+        />
+      )}
+
+      {updateOpen && (
+        <UpdateModal
+          currentVersion={appVersion || updateResult?.currentVersion || '1.0.0'}
+          result={updateResult}
+          checking={updateChecking}
+          error={updateError}
+          onClose={() => setUpdateOpen(false)}
+          onRetry={() => void handleCheckUpdates()}
+          onDownload={(targetUrl) => {
+            void openExternal(targetUrl)
+            notify('安装包下载已在浏览器中打开', 'success')
+          }}
+          onOpenRelease={(targetUrl) => void openExternal(targetUrl)}
         />
       )}
 
