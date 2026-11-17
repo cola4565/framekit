@@ -20,7 +20,8 @@
     "test:deep": "esbuild scripts/deep-smoke.ts --bundle --platform=node --format=cjs --external:electron --outfile=.tmp/deep-smoke.cjs && electron .tmp/deep-smoke.cjs",
     "test:ui": "tsx scripts/ui-smoke.ts",
     "test:download": "tsx scripts/download-smoke.ts",
-    "test:bilibili": "esbuild scripts/bilibili-merge-smoke.ts --bundle --platform=node --format=cjs --external:electron --external:ffmpeg-static --outfile=.tmp/bilibili-merge-smoke.cjs && electron .tmp/bilibili-merge-smoke.cjs"
+    "test:bilibili": "esbuild scripts/bilibili-merge-smoke.ts --bundle --platform=node --format=cjs --external:electron --external:ffmpeg-static --outfile=.tmp/bilibili-merge-smoke.cjs && electron .tmp/bilibili-merge-smoke.cjs",
+    "release:github": "node scripts/github-release.mjs"
   },
   "dependencies": {
     "cheerio": "^1.2.0",

@@ -89,7 +89,7 @@ UI 冒烟需要两个后台进程：`npm run demo`（127.0.0.1:8787）与 `FRAME
 - `ffmpeg-static` 安装需要访问 GitHub，失败时用：
   `$env:FFMPEG_BINARIES_URL='https://registry.npmmirror.com/-/binary/ffmpeg-static'; npm install ffmpeg-static@5.3.0`
 - electron-builder 首次打包会下载 `winCodeSign` 等工具；同样需要代理（或 `ELECTRON_BUILDER_BINARIES_MIRROR` 镜像）。
-- 发布脚本为一次性工具：`.tmp/github-release.mjs`（创建/更新 Release、上传 exe + blockmap、触发 macOS 工作流，token 取 `GH_PUBLISH_TOKEN` 或 `gh auth token`）。
+- 发布脚本：`scripts/github-release.mjs`（`npm run release:github`，创建/更新 Release、上传 exe + blockmap、触发 macOS 工作流，token 取 `GH_PUBLISH_TOKEN` 或 `gh auth token`）。
 - macOS DMG 不在本地构建，由 `.github/workflows/release.yml` 在 `macos-latest` 上构建并上传。
 
 ## 已踩过的问题（不要重复）

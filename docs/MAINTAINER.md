@@ -73,7 +73,7 @@ npm version 1.2.0 --no-git-tag-version
 
 - `CHANGELOG.md`：新增版本段落（新增 / 修复）
 - `README.md`：`当前正式版` 与三条下载链接
-- `.tmp/release-notes-<version>.md`：Release 正文（Markdown）
+- `.tmp/release-notes-<version>.md`：Release 正文，可从 `docs/release-notes-template.md` 复制后填写
 
 ### 4.2 构建 Windows 安装包
 
@@ -127,12 +127,12 @@ gh auth setup-git --hostname github.com
 
 ### 4.5 创建 Release 并上传 Windows 资产
 
-仓库内没有常驻发布脚本，使用一次性 Node 脚本（参考 `.tmp/github-release.mjs`）：
+发布脚本已随仓库提供：`scripts/github-release.mjs`（`npm run release:github`）：
 
 1. 读取 `package.json` 的 `version` 作为 tag（`v<version>`）
 2. 若 Release 不存在则创建，存在则 `PATCH` 正文
 3. 删除同名旧资产后上传 exe 与 blockmap 到 `uploads.github.com`
-4. 触发 `release.yml`（macOS 构建）
+4. 新 tag 会自动触发 `release.yml`（macOS 构建）；只有 tag 已存在时才需要 `TRIGGER_MACOS=1` 手动补触发
 
 执行：
 
@@ -140,10 +140,10 @@ gh auth setup-git --hostname github.com
 $env:HTTPS_PROXY='http://127.0.0.1:7890'
 $env:GH_PUBLISH_TOKEN = (gh auth token)
 $env:GITHUB_REPOSITORY='cola4565/framekit'
-node .tmp/github-release.mjs
+npm run release:github
 ```
 
-> 注意：推送 tag 本身也会触发 `release.yml`，脚本又手动 dispatch 一次，会产生两条并行构建。发版后保留一条、取消另一条即可。
+> 默认不手动 dispatch，避免与 tag push 触发的构建重复。若确实需要补触发，设置 `TRIGGER_MACOS=1`。
 
 ### 4.6 收尾验证
 
