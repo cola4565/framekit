@@ -12,6 +12,7 @@ import {
   Image as ImageIcon,
   Layers,
   Loader2,
+  LogIn,
   Music,
   RefreshCw,
   Search,
@@ -23,6 +24,7 @@ import EmptyState from './components/EmptyState'
 import PreviewModal from './components/PreviewModal'
 import ResourceCard from './components/ResourceCard'
 import Sidebar from './components/Sidebar'
+import { lowestQualityVariant } from './shared/media'
 import UpdateModal from './components/UpdateModal'
 import type {
   DownloadProgress,
@@ -90,12 +92,16 @@ export default function App(): React.JSX.Element {
   const [destination, setDestination] = useState(readSavedPath)
   const [queueOpen, setQueueOpen] = useState(false)
   const [downloads, setDownloads] = useState<DownloadProgress[]>([])
+  const removedDownloadIds = useRef<Set<string>>(new Set())
+  const downloadsRef = useRef<DownloadProgress[]>([])
   const [toast, setToast] = useState<ToastState | null>(null)
   const [appVersion, setAppVersion] = useState('')
   const [updateOpen, setUpdateOpen] = useState(false)
   const [updateChecking, setUpdateChecking] = useState(false)
   const [updateResult, setUpdateResult] = useState<UpdateCheckResult | null>(null)
   const [updateError, setUpdateError] = useState<string | null>(null)
+  const [bilibiliLoggedIn, setBilibiliLoggedIn] = useState(false)
+  const [bilibiliLoginBusy, setBilibiliLoginBusy] = useState(false)
   const toastTimer = useRef<number | null>(null)
   const toastId = useRef(0)
 
@@ -127,6 +133,35 @@ export default function App(): React.JSX.Element {
     }
   }, [])
 
+  const isBilibiliInput = useMemo(() => {
+    try {
+      const parsed = new URL(url.trim())
+      return (
+        parsed.hostname === 'b23.tv' ||
+        parsed.hostname === 'bilibili.com' ||
+        parsed.hostname.endsWith('.bilibili.com')
+      )
+    } catch {
+      return false
+    }
+  }, [url])
+
+  useEffect(() => {
+    if (!isBilibiliInput) return
+    let active = true
+    void window.framekit
+      .getBilibiliAuthStatus()
+      .then((loggedIn) => {
+        if (active) setBilibiliLoggedIn(loggedIn)
+      })
+      .catch(() => {
+        if (active) setBilibiliLoggedIn(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [isBilibiliInput])
+
   useEffect(() => {
     try {
       if (destination) localStorage.setItem(SAVE_PATH_KEY, destination)
@@ -143,6 +178,7 @@ export default function App(): React.JSX.Element {
 
   useEffect(() => {
     return window.framekit.onDownloadProgress((nextProgress) => {
+      if (removedDownloadIds.current.has(nextProgress.id)) return
       setDownloads((current) => {
         const index = current.findIndex((task) => task.id === nextProgress.id)
         if (index === -1) return [nextProgress, ...current]
@@ -152,6 +188,64 @@ export default function App(): React.JSX.Element {
       })
     })
   }, [])
+
+  useEffect(() => {
+    const listDownloads = window.framekit.listDownloads
+    if (typeof listDownloads !== 'function') return
+    void listDownloads
+      .call(window.framekit)
+      .then((history) => {
+        setDownloads((current) => {
+          const known = new Set(current.map((task) => task.id))
+          const restored = history.filter(
+            (task) => !known.has(task.id) && !removedDownloadIds.current.has(task.id)
+          )
+          return [...current, ...restored]
+        })
+      })
+      .catch(() => undefined)
+  }, [])
+
+  useEffect(() => {
+    downloadsRef.current = downloads
+  }, [downloads])
+
+  useEffect(() => {
+    if (!queueOpen) return
+    const verifyDownloads = window.framekit.verifyDownloads
+    if (typeof verifyDownloads !== 'function') return
+    let cancelled = false
+
+    const verify = async (): Promise<void> => {
+      const ids = downloadsRef.current
+        .filter((task) => task.status === 'done' && task.filePath)
+        .map((task) => task.id)
+      if (ids.length === 0) return
+      const missing = await verifyDownloads
+        .call(window.framekit, ids)
+        .catch(() => [] as string[])
+      if (cancelled) return
+      const missingIds = new Set(missing)
+      setDownloads((current) => {
+        let changed = false
+        const next = current.map((task) => {
+          if (task.status !== 'done' || !task.filePath) return task
+          const isMissing = missingIds.has(task.id)
+          if (Boolean(task.fileMissing) === isMissing) return task
+          changed = true
+          return { ...task, fileMissing: isMissing }
+        })
+        return changed ? next : current
+      })
+    }
+
+    void verify()
+    const timer = window.setInterval(() => void verify(), 5000)
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
+  }, [queueOpen])
 
   const chooseDirectory = useCallback(async (): Promise<string | null> => {
     try {
@@ -225,6 +319,23 @@ export default function App(): React.JSX.Element {
     }
   }, [notify])
 
+  const handleBilibiliLogin = useCallback(async (): Promise<void> => {
+    if (bilibiliLoginBusy) return
+    setBilibiliLoginBusy(true)
+    try {
+      const loggedIn = await window.framekit.loginBilibili()
+      setBilibiliLoggedIn(loggedIn)
+      notify(
+        loggedIn ? 'Bilibili 登录成功，重新解析可获取更高清晰度' : 'Bilibili 登录未完成',
+        loggedIn ? 'success' : 'info'
+      )
+    } catch (loginError) {
+      notify(errorMessage(loginError), 'error')
+    } finally {
+      setBilibiliLoginBusy(false)
+    }
+  }, [bilibiliLoginBusy, notify])
+
   const toggleResource = (id: string): void => {
     setSelected((current) => {
       const next = new Set(current)
@@ -273,7 +384,9 @@ export default function App(): React.JSX.Element {
             url: resource.url,
             filename: resource.filename,
             kind: resource.kind,
-            pageUrl: resource.pageUrl
+            pageUrl: resource.pageUrl,
+            audioUrl: resource.audioUrl,
+            audioMime: resource.audioMime
           })),
           targetDirectory
         )
@@ -302,6 +415,25 @@ export default function App(): React.JSX.Element {
   const handleCancelDownload = (id: string): void => {
     void window.framekit.cancelDownload(id)
   }
+
+  const handleRemoveDownload = useCallback(
+    async (id: string): Promise<void> => {
+      const removeDownload = window.framekit.removeDownload
+      if (typeof removeDownload !== 'function') {
+        notify('请重启 FrameKit 后再删除下载', 'error')
+        return
+      }
+      removedDownloadIds.current.add(id)
+      setDownloads((current) => current.filter((task) => task.id !== id))
+      try {
+        const result = await removeDownload.call(window.framekit, id)
+        notify(result.deletedFile ? '已删除下载和文件' : '已从队列移除', 'success')
+      } catch (error) {
+        notify(errorMessage(error), 'error')
+      }
+    },
+    [notify]
+  )
 
   const filteredResources = useMemo(() => {
     if (!result) return []
@@ -386,12 +518,12 @@ export default function App(): React.JSX.Element {
           </button>
           <button
             type="button"
-            className={`appbar-button${queueOpen ? ' is-active' : ''}`}
+            className={`appbar-button queue-button${queueOpen ? ' is-active' : ''}`}
             onClick={() => setQueueOpen(true)}
           >
             <Download size={15} />
             <span>{downloadMenuLabel}</span>
-            {downloads.length > 0 && <b>{downloads.length}</b>}
+            {activeDownloads > 0 && <b className="queue-badge">{activeDownloads}</b>}
           </button>
         </div>
       </header>
@@ -474,35 +606,64 @@ export default function App(): React.JSX.Element {
               </div>
 
               <div className="parser-options">
-                <div className="mode-selector" role="group" aria-label="解析模式">
-                  <button
-                    type="button"
-                    className={!deep ? 'is-active' : ''}
-                    onClick={() => setDeep(false)}
-                  >
-                    <Zap size={16} />
-                    <span>
-                      <strong>快速扫描</strong>
-                      <small>源码 + CSS + 元数据</small>
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    className={deep ? 'is-active' : ''}
-                    onClick={() => setDeep(true)}
-                  >
-                    <Globe size={16} />
-                    <span>
-                      <strong>深度嗅探</strong>
-                      <small>执行脚本 + 网络监听</small>
-                    </span>
-                    <em>SLOW</em>
-                  </button>
+                <div className="parser-options-left">
+                  <div className="mode-selector" role="group" aria-label="解析模式">
+                    <button
+                      type="button"
+                      className={!deep ? 'is-active' : ''}
+                      onClick={() => setDeep(false)}
+                    >
+                      <Zap size={16} />
+                      <span>
+                        <strong>快速扫描</strong>
+                        <small>源码 + CSS + 元数据</small>
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      className={deep ? 'is-active' : ''}
+                      onClick={() => setDeep(true)}
+                    >
+                      <Globe size={16} />
+                      <span>
+                        <strong>深度嗅探</strong>
+                        <small>执行脚本 + 网络监听</small>
+                      </span>
+                      <em>SLOW</em>
+                    </button>
+                </div>
+                  {isBilibiliInput && (
+                    <button
+                      type="button"
+                      className={`bilibili-login-button${bilibiliLoggedIn ? ' is-logged-in' : ''}`}
+                      onClick={() => void handleBilibiliLogin()}
+                      disabled={bilibiliLoginBusy}
+                      title={
+                        bilibiliLoggedIn
+                          ? 'Bilibili 已登录；重新解析可获取账号清晰度'
+                          : '登录 Bilibili，获取账号或大会员清晰度'
+                      }
+                    >
+                      {bilibiliLoginBusy ? (
+                        <Loader2 size={15} className="spin" />
+                      ) : bilibiliLoggedIn ? (
+                        <Check size={15} />
+                      ) : (
+                        <LogIn size={15} />
+                      )}
+                      {bilibiliLoggedIn ? 'B站已登录' : '登录 B站'}
+                    </button>
+                  )}
+
                 </div>
 
                 <div className="parse-submit">
                   <span className="mode-hint">
-                    {deep ? '会启动内置浏览器，通常需要 5–15 秒' : '速度最快，适合静态图和直链资源'}
+                    {isBilibiliInput
+                      ? 'Bilibili 会读取独立音轨并按账号权限列出清晰度'
+                      : deep
+                        ? '会启动内置浏览器，通常需要 5–15 秒'
+                        : '速度最快，适合静态图和直链资源'}
                   </span>
                   <button
                     type="submit"
@@ -786,16 +947,22 @@ export default function App(): React.JSX.Element {
         onChooseDirectory={() => void chooseDirectory()}
         onReveal={handleReveal}
         onCancel={handleCancelDownload}
-        onClearFinished={() =>
+        onRemove={(id) => void handleRemoveDownload(id)}
+        onClearFinished={() => {
           setDownloads((current) =>
             current.filter((task) => ['queued', 'downloading'].includes(task.status))
           )
-        }
+          const clearDownloads = window.framekit.clearDownloads
+          if (typeof clearDownloads === 'function') {
+            void clearDownloads.call(window.framekit)
+          }
+        }}
       />
 
       {preview && (
         <PreviewModal
           resource={preview}
+          playbackResource={lowestQualityVariant(preview, result?.resources)}
           onClose={() => setPreview(null)}
           onDownload={(resource) => {
             setPreview(null)

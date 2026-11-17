@@ -91,6 +91,27 @@ const server = createServer((request, response) => {
     response.end(svgImage(9, 'NEON COAST'))
     return
   }
+  if (url === '/slow/asset.bin') {
+    const total = 1024 * 1024
+    const chunk = Buffer.alloc(32 * 1024, 7)
+    let sent = 0
+    response.writeHead(200, {
+      'content-type': 'application/octet-stream',
+      'content-length': String(total),
+      'cache-control': 'no-store'
+    })
+    const timer = setInterval(() => {
+      if (sent >= total) {
+        clearInterval(timer)
+        response.end()
+        return
+      }
+      response.write(chunk)
+      sent += chunk.length
+    }, 50)
+    request.on('close', () => clearInterval(timer))
+    return
+  }
   if (url.startsWith('/media/') || url.startsWith('/docs/')) {
     response.writeHead(200, {
       'content-type': url.endsWith('.mp4')

@@ -867,6 +867,13 @@ label:focus-within {
   margin-top: 13px;
 }
 
+.parser-options-left {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
 .mode-selector {
   display: flex;
   gap: 4px;
@@ -942,6 +949,44 @@ label:focus-within {
   font-style: normal;
   font-weight: 700;
   background: var(--accent-soft);
+}
+
+.bilibili-login-button {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+  height: 44px;
+  padding: 0 13px;
+  border: 1px solid rgba(115, 166, 255, 0.26);
+  border-radius: 10px;
+  color: #b9d1ff;
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+  background: rgba(115, 166, 255, 0.08);
+  cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    background 150ms ease,
+    color 150ms ease;
+}
+
+.bilibili-login-button:hover:not(:disabled) {
+  border-color: rgba(115, 166, 255, 0.48);
+  color: #dce8ff;
+  background: rgba(115, 166, 255, 0.14);
+}
+
+.bilibili-login-button.is-logged-in {
+  border-color: rgba(83, 209, 139, 0.24);
+  color: rgba(154, 235, 190, 0.9);
+  background: rgba(83, 209, 139, 0.07);
+}
+
+.bilibili-login-button:disabled {
+  opacity: 0.55;
+  cursor: default;
 }
 
 .parse-submit {
@@ -1891,6 +1936,21 @@ label:focus-within {
   backdrop-filter: blur(8px);
 }
 
+.audio-merge-chip {
+  position: absolute;
+  bottom: 9px;
+  left: 9px;
+  padding: 3px 6px;
+  border: 1px solid rgba(83, 209, 139, 0.28);
+  border-radius: 4px;
+  color: #a7efc4;
+  font-size: 7px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  background: rgba(12, 36, 24, 0.78);
+  backdrop-filter: blur(8px);
+}
+
 .dimension-chip {
   position: absolute;
   bottom: 9px;
@@ -2071,6 +2131,12 @@ label:focus-within {
 .icon-button.large {
   width: 34px;
   height: 34px;
+}
+
+.icon-button.danger:hover {
+  border-color: rgba(255, 92, 92, 0.4);
+  color: var(--red);
+  background: rgba(255, 92, 92, 0.12);
 }
 
 .download-mini {
@@ -2422,6 +2488,10 @@ label:focus-within {
   content: "·";
 }
 
+.preview-details .preview-quality-hint {
+  color: var(--accent);
+}
+
 .preview-actions {
   display: flex;
   flex: 0 0 auto;
@@ -2629,6 +2699,16 @@ label:focus-within {
   color: rgba(255, 140, 140, 0.8);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.queue-item.is-missing .queue-status span:first-child {
+  color: rgba(255, 140, 140, 0.8);
+}
+
+.queue-item.is-missing .queue-heading h3 {
+  color: var(--subtle);
+  text-decoration: line-through;
+  text-decoration-color: rgba(255, 140, 140, 0.5);
 }
 
 .queue-actions {
@@ -3020,6 +3100,14 @@ label:focus-within {
   .main-content {
     padding-right: 28px;
     padding-left: 28px;
+  }
+
+  .mode-hint {
+    display: none;
+  }
+
+  .mode-selector button {
+    min-width: 150px;
   }
 }
 

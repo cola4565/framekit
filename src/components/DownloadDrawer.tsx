@@ -18,12 +18,15 @@ interface DownloadDrawerProps {
   onChooseDirectory: () => void
   onReveal: (filePath: string) => void
   onCancel: (id: string) => void
+  onRemove: (id: string) => void
   onClearFinished: () => void
 }
 
 function statusLabel(task: DownloadProgress): string {
+  if (task.fileMissing) return '文件已在磁盘上删除'
   if (task.status === 'queued') return '等待中'
   if (task.status === 'downloading') {
+    if (task.phase === 'merge') return task.message || '正在合并音视频…'
     return task.total
       ? `${formatBytes(task.received)} / ${formatBytes(task.total)}`
       : formatBytes(task.received)
@@ -41,6 +44,7 @@ export default function DownloadDrawer({
   onChooseDirectory,
   onReveal,
   onCancel,
+  onRemove,
   onClearFinished
 }: DownloadDrawerProps): React.JSX.Element | null {
   if (!open) return null
@@ -77,7 +81,10 @@ export default function DownloadDrawer({
             {tasks.map((task) => {
               const percent = percentOf(task.received, task.total)
               return (
-                <article key={`${task.id}-${task.startedAt ?? 'queued'}`} className={`queue-item status-${task.status}`}>
+                <article
+                  key={`${task.id}-${task.startedAt ?? 'queued'}`}
+                  className={`queue-item status-${task.status}${task.fileMissing ? ' is-missing' : ''}`}
+                >
                   <div className={`queue-kind kind-${task.kind}`}>
                     {task.status === 'done' ? (
                       <Check size={17} />
@@ -102,7 +109,9 @@ export default function DownloadDrawer({
                       <span className={task.status === 'error' ? 'error-text' : ''}>
                         {statusLabel(task)}
                       </span>
-                      {task.status === 'downloading' && <span>{formatSpeed(task.speed)}</span>}
+                      {task.status === 'downloading' && task.phase !== 'merge' && (
+                        <span>{formatSpeed(task.speed)}</span>
+                      )}
                     </div>
                   </div>
                   <div className="queue-actions">
@@ -114,16 +123,29 @@ export default function DownloadDrawer({
                       >
                         取消
                       </button>
-                    ) : task.filePath ? (
-                      <button
-                        type="button"
-                        className="icon-button"
-                        title="在文件夹中显示"
-                        onClick={() => onReveal(task.filePath!)}
-                      >
-                        <FolderOpen size={16} />
-                      </button>
                     ) : null}
+                    {task.status !== 'downloading' &&
+                      task.status !== 'queued' &&
+                      task.filePath &&
+                      !task.fileMissing && (
+                        <button
+                          type="button"
+                          className="icon-button"
+                          title="在文件夹中显示"
+                          onClick={() => onReveal(task.filePath!)}
+                        >
+                          <FolderOpen size={16} />
+                        </button>
+                      )}
+                    <button
+                      type="button"
+                      className="icon-button danger"
+                      title={task.fileMissing ? '移除这条记录' : '从队列删除并删除文件'}
+                      aria-label="删除下载和文件"
+                      onClick={() => onRemove(task.id)}
+                    >
+                      <Trash2 size={16} />
+                    </button>
                   </div>
                 </article>
               )
@@ -142,9 +164,14 @@ export default function DownloadDrawer({
             </span>
           </button>
           {finishedCount > 0 && (
-            <button type="button" className="text-button" onClick={onClearFinished}>
+            <button
+              type="button"
+              className="text-button"
+              title="只清空列表记录，不删除已下载文件"
+              onClick={onClearFinished}
+            >
               <Trash2 size={14} />
-              清除已完成
+              清空列表
             </button>
           )}
         </footer>

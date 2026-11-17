@@ -26,6 +26,7 @@ interface QueueState {
   done?: boolean
   error?: string
   filename?: string
+  badge?: string
 }
 
 const debugPort = process.env.FRAMEKIT_DEBUG_PORT ?? '9222'
@@ -168,26 +169,44 @@ async function main(): Promise<void> {
   const downloadDirectory = resolve('.tmp', `ui-download-${Date.now()}`)
   await evaluate(`window.framekit.startDownloads([{
     id: 'ui-smoke-download',
-    url: 'http://127.0.0.1:8787/images/01.svg',
-    filename: 'ui-smoke.svg',
-    kind: 'image',
+    url: 'http://127.0.0.1:8787/slow/asset.bin',
+    filename: 'ui-smoke.bin',
+    kind: 'other',
     pageUrl: 'http://127.0.0.1:8787/demo'
   }], ${JSON.stringify(downloadDirectory)})`)
-  await evaluate("document.querySelectorAll('.appbar-button')[1].click()")
+  await evaluate("document.querySelector('.queue-button').click()")
 
   let queueState: QueueState | null = null
+  let sawActiveBadge = false
   const queueDeadline = Date.now() + 12000
   while (Date.now() < queueDeadline) {
     queueState = (await evaluate(`(() => ({
       done: Boolean(document.querySelector('.download-drawer .queue-item.status-done')),
       error: document.querySelector('.download-drawer .queue-item.status-error .error-text')?.textContent || '',
-      filename: document.querySelector('.download-drawer .queue-item.status-done h3')?.textContent || ''
+      filename: document.querySelector('.download-drawer .queue-item.status-done h3')?.textContent || '',
+      badge: document.querySelector('.queue-badge')?.textContent || ''
     }))()`)) as QueueState
+    if (queueState.badge === '1') sawActiveBadge = true
     if (queueState?.done || queueState?.error) break
     await new Promise((resolveDelay) => setTimeout(resolveDelay, 250))
   }
   if (!queueState?.done) throw new Error(queueState?.error || '下载队列没有完成')
-  const downloadedFile = await stat(resolve(downloadDirectory, queueState.filename || 'ui-smoke.svg'))
+  if (!sawActiveBadge) throw new Error('下载进行时没有显示队列角标')
+
+  let badgeAfterCompletion = 'missing'
+  const badgeDeadline = Date.now() + 3000
+  while (Date.now() < badgeDeadline) {
+    badgeAfterCompletion = String(
+      (await evaluate("document.querySelector('.queue-badge')?.textContent || ''")) ?? ''
+    )
+    if (!badgeAfterCompletion) break
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 100))
+  }
+  if (badgeAfterCompletion) {
+    throw new Error(`下载完成后角标仍在：${badgeAfterCompletion}`)
+  }
+
+  const downloadedFile = await stat(resolve(downloadDirectory, queueState.filename || 'ui-smoke.bin'))
   if (downloadedFile.size <= 0) throw new Error('下载文件为空')
 
   await new Promise((resolveDelay) => setTimeout(resolveDelay, 350))

@@ -26,6 +26,13 @@ export interface MediaResource {
   label?: string
   discoveryLabel: string
   isStream: boolean
+  audioUrl?: string
+  audioMime?: string
+  qualityId?: number
+  qualityLabel?: string
+  codec?: string
+  mergeAudio?: boolean
+  groupId?: string
 }
 
 export interface ParseStats {
@@ -74,6 +81,9 @@ export interface DownloadRequest {
   filename: string
   kind: ResourceKind
   pageUrl: string
+  audioUrl?: string
+  audioMime?: string
+  cookie?: string
 }
 
 export interface DownloadProgress {
@@ -90,6 +100,9 @@ export interface DownloadProgress {
   destination: string
   startedAt?: number
   finishedAt?: number
+  message?: string
+  phase?: 'download' | 'merge'
+  fileMissing?: boolean
 }
 
 export interface StartDownloadsResult {
@@ -114,6 +127,8 @@ export interface FramekitApi {
   platform: NodeJS.Platform
   getAppVersion: () => Promise<string>
   checkForUpdates: () => Promise<UpdateCheckResult>
+  getBilibiliAuthStatus: () => Promise<boolean>
+  loginBilibili: () => Promise<boolean>
   parsePage: (url: string, options: ParseOptions) => Promise<ParseResult>
   onParseProgress: (callback: (progress: ParseProgress) => void) => () => void
   chooseDirectory: () => Promise<string | null>
@@ -122,6 +137,10 @@ export interface FramekitApi {
     destination: string
   ) => Promise<StartDownloadsResult>
   cancelDownload: (id: string) => Promise<void>
+  removeDownload: (id: string) => Promise<{ removed: boolean; deletedFile: boolean }>
+  listDownloads: () => Promise<DownloadProgress[]>
+  clearDownloads: () => Promise<void>
+  verifyDownloads: (ids: string[]) => Promise<string[]>
   onDownloadProgress: (callback: (progress: DownloadProgress) => void) => () => void
   revealFile: (filePath: string) => Promise<void>
   openExternal: (url: string) => Promise<void>

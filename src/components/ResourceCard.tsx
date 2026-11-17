@@ -16,6 +16,7 @@ import {
   kindMeta,
   sourceMeta
 } from '../shared/format'
+import { toPreviewUrl } from '../shared/media'
 
 interface ResourceCardProps {
   resource: MediaResource
@@ -46,7 +47,10 @@ export default function ResourceCard({
   const isImage = resource.kind === 'image'
   const isVideo = resource.kind === 'video'
   const isAudio = resource.kind === 'audio'
-  const posterUrl = isImage ? resource.url : isVideo ? resource.poster : undefined
+  const posterSource = isImage ? resource.url : isVideo ? resource.poster : undefined
+  const posterUrl = posterSource
+    ? toPreviewUrl(posterSource, resource.pageUrl)
+    : undefined
   const width = resource.width && resource.height ? `${resource.width} × ${resource.height}` : ''
 
   return (
@@ -116,6 +120,7 @@ export default function ResourceCard({
           </span>
         )}
         {resource.isStream && <span className="stream-chip">HLS / DASH</span>}
+        {resource.mergeAudio && <span className="audio-merge-chip">+ AUDIO</span>}
         {width && isImage && <span className="dimension-chip">{width}</span>}
       </button>
 

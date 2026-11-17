@@ -183,6 +183,12 @@ export interface Candidate {
   duration?: number
   poster?: string
   stream?: boolean
+  audioUrl?: string
+  audioMime?: string
+  qualityId?: number
+  qualityLabel?: string
+  codec?: string
+  mergeAudio?: boolean
 }
 
 interface ClassifiedResource {
@@ -341,7 +347,13 @@ export function makeResource(candidate: Candidate, pageUrl: string): MediaResour
     poster: candidate.poster ? normalizeUrl(candidate.poster, pageUrl) ?? undefined : undefined,
     label: candidate.label?.trim() || undefined,
     discoveryLabel: candidate.discoveryLabel,
-    isStream: candidate.stream ?? classified.isStream
+    isStream: candidate.stream ?? classified.isStream,
+    audioUrl: candidate.audioUrl,
+    audioMime: candidate.audioMime,
+    qualityId: candidate.qualityId,
+    qualityLabel: candidate.qualityLabel,
+    codec: candidate.codec,
+    mergeAudio: candidate.mergeAudio
   }
 }
 
@@ -364,7 +376,13 @@ function mergeResource(existing: MediaResource, incoming: MediaResource): MediaR
     height: existing.height ?? incoming.height,
     duration: existing.duration ?? incoming.duration,
     poster: existing.poster ?? incoming.poster,
-    isStream: existing.isStream || incoming.isStream
+    isStream: existing.isStream || incoming.isStream,
+    audioUrl: existing.audioUrl ?? incoming.audioUrl,
+    audioMime: existing.audioMime ?? incoming.audioMime,
+    qualityId: existing.qualityId ?? incoming.qualityId,
+    qualityLabel: existing.qualityLabel ?? incoming.qualityLabel,
+    codec: existing.codec ?? incoming.codec,
+    mergeAudio: existing.mergeAudio || incoming.mergeAudio
   }
 }
 

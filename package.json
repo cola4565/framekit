@@ -1,6 +1,6 @@
 {
   "name": "framekit",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "FrameKit - a cross-platform toolkit for video editors and post-production artists.",
   "main": "out/main/index.js",
@@ -23,6 +23,7 @@
   },
   "dependencies": {
     "cheerio": "^1.2.0",
+    "ffmpeg-static": "^5.3.0",
     "lucide-react": "^1.73.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
@@ -44,6 +45,9 @@
     "appId": "com.framekit.desktop",
     "productName": "FrameKit",
     "asar": true,
+    "asarUnpack": [
+      "node_modules/ffmpeg-static/**"
+    ],
     "directories": {
       "output": "release",
       "buildResources": "assets"

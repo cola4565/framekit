@@ -10,6 +10,7 @@ import {
   statsForResources,
   validateAndNormalizePageUrl
 } from './extractor'
+import { extractBilibiliPage, isBilibiliVideoUrl } from './bilibili'
 import { sniffPage } from './sniffer'
 
 type ProgressReporter = (progress: ParseProgress) => void
@@ -48,6 +49,51 @@ export async function parsePage(
   } catch (error) {
     if (!options.deep) throw error
     quickResult = fallbackResult(pageUrl, error)
+  }
+
+  if (isBilibiliVideoUrl(quickResult.finalUrl || pageUrl)) {
+    onProgress({
+      stage: 'browser',
+      message: '识别到 Bilibili，正在读取清晰度与独立音轨…',
+      percent: 48
+    })
+    try {
+      const bilibili = await extractBilibiliPage(quickResult.finalUrl || pageUrl, onProgress)
+      const resources = bilibili.resources
+      onProgress({
+        stage: 'done',
+        message: `Bilibili 解析完成，共 ${bilibili.resources.length} 个清晰度`,
+        percent: 100
+      })
+      return {
+        ...quickResult,
+        finalUrl: bilibili.finalUrl || quickResult.finalUrl,
+        title: bilibili.title || quickResult.title,
+        description: bilibili.description ?? quickResult.description,
+        siteName: 'bilibili.com',
+        favicon: bilibili.favicon ?? quickResult.favicon,
+        mode: 'deep',
+        resources,
+        stats: statsForResources(resources),
+        warnings: uniqueWarnings([...quickResult.warnings, ...bilibili.warnings]),
+        elapsedMs: Date.now() - startedAt
+      }
+    } catch (error) {
+      const warning = `Bilibili 专用解析失败：${
+        error instanceof Error ? error.message : '未知错误'
+      }`
+      if (!options.deep) {
+        return {
+          ...quickResult,
+          warnings: uniqueWarnings([...quickResult.warnings, warning]),
+          elapsedMs: Date.now() - startedAt
+        }
+      }
+      quickResult = {
+        ...quickResult,
+        warnings: uniqueWarnings([...quickResult.warnings, warning])
+      }
+    }
   }
 
   if (!options.deep || quickResult.resources.some((resource) => resource.source === 'direct')) {

@@ -1,3 +1,5 @@
+import { existsSync } from 'node:fs'
+import { unlink } from 'node:fs/promises'
 import { join } from 'node:path'
 import {
   app,
@@ -11,18 +13,26 @@ import {
 } from 'electron'
 import type { MenuItemConstructorOptions } from 'electron'
 import type { DownloadRequest, ParseOptions } from '../src/shared/types'
+import { getBilibiliAuthStatus, getBilibiliCookieHeader, loginBilibili } from './bilibili'
+import { DownloadHistory } from './download-history'
 import { DownloadManager } from './downloader'
+import { installMediaProtocol, registerMediaScheme } from './media-protocol'
 import { parsePage } from './parser'
 import { checkForUpdates } from './updater'
 
 const isMac = process.platform === 'darwin'
 let mainWindow: BrowserWindow | null = null
 
+registerMediaScheme()
+
 if (process.env.FRAMEKIT_DEBUG_PORT) {
   app.commandLine.appendSwitch('remote-debugging-port', process.env.FRAMEKIT_DEBUG_PORT)
 }
 
+const downloadHistory = new DownloadHistory()
+
 const downloadManager = new DownloadManager((progress) => {
+  downloadHistory.record(progress)
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('download:progress', progress)
   }
@@ -142,6 +152,10 @@ function registerIpc(): void {
 
   ipcMain.handle('updates:check', async () => checkForUpdates(app.getVersion()))
 
+  ipcMain.handle('bilibili:auth-status', async () => getBilibiliAuthStatus())
+
+  ipcMain.handle('bilibili:login', async () => loginBilibili(mainWindow))
+
   ipcMain.handle('parse:page', async (event, rawUrl: unknown, rawOptions: unknown) => {
     if (typeof rawUrl !== 'string') throw new Error('网址参数无效')
     const options: ParseOptions = {
@@ -164,6 +178,7 @@ function registerIpc(): void {
       if (!Array.isArray(rawRequests) || typeof rawDestination !== 'string') {
         throw new Error('下载参数无效')
       }
+      const cookie = await getBilibiliCookieHeader()
       const requests: DownloadRequest[] = []
       for (const item of rawRequests) {
         if (!item || typeof item !== 'object') continue
@@ -182,7 +197,15 @@ function registerIpc(): void {
           url: record.url,
           filename: record.filename,
           pageUrl: record.pageUrl,
-          kind: record.kind as DownloadRequest['kind']
+          kind: record.kind as DownloadRequest['kind'],
+          audioUrl:
+            typeof record.audioUrl === 'string' &&
+            Boolean(record.audioUrl) &&
+            /^https?:\/\//i.test(record.audioUrl)
+              ? record.audioUrl
+              : undefined,
+          audioMime: typeof record.audioMime === 'string' ? record.audioMime : undefined,
+          cookie: cookie || undefined
         })
       }
       return downloadManager.enqueue(requests, rawDestination)
@@ -191,6 +214,37 @@ function registerIpc(): void {
 
   ipcMain.handle('downloads:cancel', async (_event, id: unknown) => {
     if (typeof id === 'string') downloadManager.cancel(id)
+  })
+
+  ipcMain.handle('downloads:remove', async (_event, id: unknown) => {
+    if (typeof id !== 'string') return { removed: false, deletedFile: false }
+    const result = await downloadManager.remove(id)
+    const record = downloadHistory.take(id)
+    let deletedFile = result.deletedFile
+    if (record?.filePath && existsSync(record.filePath)) {
+      await unlink(record.filePath).catch(() => undefined)
+      deletedFile = !existsSync(record.filePath)
+    }
+    return { removed: result.removed || Boolean(record), deletedFile }
+  })
+
+  ipcMain.handle('downloads:list', async () => downloadHistory.list())
+
+  ipcMain.handle('downloads:clear', async () => {
+    downloadHistory.clear()
+  })
+
+  ipcMain.handle('downloads:verify', async (_event, ids: unknown) => {
+    if (!Array.isArray(ids)) return []
+    const history = downloadHistory.list()
+    const missing: string[] = []
+    for (const id of ids) {
+      if (typeof id !== 'string') continue
+      const filePath =
+        downloadManager.filePathOf(id) ?? history.find((item) => item.id === id)?.filePath
+      if (filePath && !existsSync(filePath)) missing.push(id)
+    }
+    return missing
   })
 
   ipcMain.handle('dialog:choose-directory', async () => {
@@ -239,13 +293,15 @@ if (!hasLock) {
     }
   })
 
-  app.whenReady().then(() => {
+  app.whenReady().then(async () => {
     if (process.platform === 'win32') {
       app.setAppUserModelId('com.framekit.desktop')
     }
     session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => {
       callback(false)
     })
+    installMediaProtocol()
+    await downloadHistory.load()
     buildMenu()
     registerIpc()
     createWindow()
@@ -257,5 +313,9 @@ if (!hasLock) {
 
   app.on('window-all-closed', () => {
     if (!isMac) app.quit()
+  })
+
+  app.on('before-quit', () => {
+    downloadHistory.flushSync()
   })
 }

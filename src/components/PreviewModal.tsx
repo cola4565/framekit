@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Download,
   ExternalLink,
@@ -8,9 +8,11 @@ import {
 } from 'lucide-react'
 import type { MediaResource } from '../shared/types'
 import { formatBytes, formatDuration, kindMeta, sourceMeta } from '../shared/format'
+import { toPreviewUrl } from '../shared/media'
 
 interface PreviewModalProps {
   resource: MediaResource
+  playbackResource?: MediaResource
   onClose: () => void
   onDownload: (resource: MediaResource) => void
   onCopy: (resource: MediaResource) => void
@@ -19,11 +21,34 @@ interface PreviewModalProps {
 
 export default function PreviewModal({
   resource,
+  playbackResource,
   onClose,
   onDownload,
   onCopy,
   onOpenExternal
 }: PreviewModalProps): React.JSX.Element {
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const audioRef = useRef<HTMLAudioElement>(null)
+  const [mediaError, setMediaError] = useState(false)
+  const playback = playbackResource ?? resource
+
+  const videoSrc = useMemo(
+    () => toPreviewUrl(playback.url, playback.pageUrl),
+    [playback.url, playback.pageUrl]
+  )
+  const audioSrc = useMemo(
+    () => (playback.audioUrl ? toPreviewUrl(playback.audioUrl, playback.pageUrl) : undefined),
+    [playback.audioUrl, playback.pageUrl]
+  )
+  const posterSrc = useMemo(
+    () => (playback.poster ? toPreviewUrl(playback.poster, playback.pageUrl) : undefined),
+    [playback.poster, playback.pageUrl]
+  )
+
+  useEffect(() => {
+    setMediaError(false)
+  }, [resource.id])
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') onClose()
@@ -35,6 +60,62 @@ export default function PreviewModal({
       document.body.classList.remove('modal-open')
     }
   }, [onClose])
+
+  useEffect(() => {
+    const video = videoRef.current
+    const audio = audioRef.current
+    if (!playback.audioUrl || !video || !audio) return
+
+    const syncTime = (): void => {
+      if (Math.abs(audio.currentTime - video.currentTime) > 0.25) {
+        audio.currentTime = video.currentTime
+      }
+    }
+    const syncVolume = (): void => {
+      audio.volume = video.volume
+      audio.muted = video.muted
+    }
+    const playAudio = (): void => {
+      syncTime()
+      syncVolume()
+      audio.playbackRate = video.playbackRate
+      void audio.play().catch(() => undefined)
+    }
+    const pauseAudio = (): void => {
+      audio.pause()
+    }
+    const seekAudio = (): void => {
+      syncTime()
+    }
+    const rateAudio = (): void => {
+      audio.playbackRate = video.playbackRate
+    }
+    const endAudio = (): void => {
+      audio.pause()
+    }
+
+    video.addEventListener('play', playAudio)
+    video.addEventListener('pause', pauseAudio)
+    video.addEventListener('seeking', seekAudio)
+    video.addEventListener('seeked', seekAudio)
+    video.addEventListener('timeupdate', syncTime)
+    video.addEventListener('volumechange', syncVolume)
+    video.addEventListener('ratechange', rateAudio)
+    video.addEventListener('ended', endAudio)
+    if (!video.paused) playAudio()
+
+    return () => {
+      video.removeEventListener('play', playAudio)
+      video.removeEventListener('pause', pauseAudio)
+      video.removeEventListener('seeking', seekAudio)
+      video.removeEventListener('seeked', seekAudio)
+      video.removeEventListener('timeupdate', syncTime)
+      video.removeEventListener('volumechange', syncVolume)
+      video.removeEventListener('ratechange', rateAudio)
+      video.removeEventListener('ended', endAudio)
+      audio.pause()
+    }
+  }, [playback.audioUrl, playback.url])
 
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={onClose}>
@@ -59,16 +140,32 @@ export default function PreviewModal({
 
         <div className={`preview-stage kind-${resource.kind}`}>
           {resource.kind === 'image' && (
-            <img src={resource.url} alt={resource.label || resource.filename} referrerPolicy="no-referrer" />
+            <img
+              src={toPreviewUrl(resource.url, resource.pageUrl)}
+              alt={resource.label || resource.filename}
+              referrerPolicy="no-referrer"
+            />
           )}
           {resource.kind === 'video' && !resource.isStream && (
             <video
-              src={resource.url}
-              poster={resource.poster}
+              ref={videoRef}
+              src={videoSrc}
+              poster={posterSrc}
               controls
               autoPlay
               playsInline
+              onError={() => setMediaError(true)}
             />
+          )}
+          {resource.kind === 'video' && !resource.isStream && playback.audioUrl && (
+            <audio ref={audioRef} src={audioSrc} preload="auto" hidden />
+          )}
+          {resource.kind === 'video' && !resource.isStream && mediaError && (
+            <div className="preview-fallback">
+              <FileText size={48} strokeWidth={1.2} />
+              <h3>当前直链无法直接播放</h3>
+              <p>该链接可能已过期或存在防盗链限制。可以先下载，合并后会生成可播放的 MP4。</p>
+            </div>
           )}
           {resource.kind === 'audio' && !resource.isStream && (
             <div className="audio-preview">
@@ -107,6 +204,11 @@ export default function PreviewModal({
             {resource.duration && <span>{formatDuration(resource.duration)}</span>}
             {resource.size && <span>{formatBytes(resource.size)}</span>}
             {resource.mime && <span>{resource.mime}</span>}
+            {playback !== resource && playback.qualityLabel && (
+              <span className="preview-quality-hint">
+                预览 {playback.qualityLabel} · 下载 {resource.qualityLabel ?? '当前所选'}
+              </span>
+            )}
           </div>
           <div className="preview-actions">
             <button type="button" className="button ghost" onClick={() => onOpenExternal(resource.url)}>

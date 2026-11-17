@@ -14,6 +14,8 @@ const api: FramekitApi = {
   platform: process.platform,
   getAppVersion: (): Promise<string> => ipcRenderer.invoke('app:get-version'),
   checkForUpdates: (): Promise<UpdateCheckResult> => ipcRenderer.invoke('updates:check'),
+  getBilibiliAuthStatus: (): Promise<boolean> => ipcRenderer.invoke('bilibili:auth-status'),
+  loginBilibili: (): Promise<boolean> => ipcRenderer.invoke('bilibili:login'),
   parsePage: (url: string, options: ParseOptions): Promise<ParseResult> =>
     ipcRenderer.invoke('parse:page', url, options),
   onParseProgress: (callback: (progress: ParseProgress) => void) => {
@@ -30,6 +32,12 @@ const api: FramekitApi = {
   ): Promise<StartDownloadsResult> =>
     ipcRenderer.invoke('downloads:start', requests, destination),
   cancelDownload: (id: string): Promise<void> => ipcRenderer.invoke('downloads:cancel', id),
+  removeDownload: (id: string): Promise<{ removed: boolean; deletedFile: boolean }> =>
+    ipcRenderer.invoke('downloads:remove', id),
+  listDownloads: (): Promise<DownloadProgress[]> => ipcRenderer.invoke('downloads:list'),
+  clearDownloads: (): Promise<void> => ipcRenderer.invoke('downloads:clear'),
+  verifyDownloads: (ids: string[]): Promise<string[]> =>
+    ipcRenderer.invoke('downloads:verify', ids),
   onDownloadProgress: (callback: (progress: DownloadProgress) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, progress: DownloadProgress): void => {
       callback(progress)
