@@ -103,6 +103,9 @@ npm run test:update
 
 # 动态资源嗅探（需要 Electron 图形环境）
 npm run test:deep
+
+# 真实 Bilibili 解析 + 下载 + 音视频合并校验（需要网络，可能需登录）
+npm run test:bilibili
 ```
 
 界面自动化测试需要三个终端：
@@ -120,6 +123,8 @@ npm run test:ui
 ```
 
 截图输出到 `.tmp/ui-results.png` 与 `.tmp/ui-queue.png`。
+
+项目架构、约定、已知问题与发版步骤见 [`AGENTS.md`](AGENTS.md)；完整发版命令与排障见 [`docs/MAINTAINER.md`](docs/MAINTAINER.md)。
 
 ## 构建安装包
 
