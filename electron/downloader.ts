@@ -296,7 +296,7 @@ export class DownloadManager {
 
     const running = this.running.get(id)
     if (running) {
-      await Promise.race([running.catch(() => undefined), new Promise((r) => setTimeout(r, 10000))])
+      await running.catch(() => undefined)
     }
 
     const targets = new Set<string>()

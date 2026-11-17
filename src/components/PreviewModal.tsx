@@ -177,7 +177,7 @@ export default function PreviewModal({
                   <i key={index} style={{ height: `${15 + ((index * 29) % 75)}%` }} />
                 ))}
               </div>
-              <audio src={resource.url} controls autoPlay />
+              <audio src={toPreviewUrl(resource.url, resource.pageUrl)} controls autoPlay />
             </div>
           )}
           {(resource.isStream || resource.kind === 'other') && (

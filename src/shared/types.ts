@@ -126,6 +126,7 @@ export interface UpdateCheckResult {
 export interface FramekitApi {
   platform: NodeJS.Platform
   getAppVersion: () => Promise<string>
+  minimizeWindow?: () => Promise<void>
   checkForUpdates: () => Promise<UpdateCheckResult>
   getBilibiliAuthStatus: () => Promise<boolean>
   loginBilibili: () => Promise<boolean>

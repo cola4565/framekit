@@ -150,6 +150,14 @@ function buildMenu(): void {
 function registerIpc(): void {
   ipcMain.handle('app:get-version', async () => app.getVersion())
 
+  ipcMain.handle('window:minimize', async () => {
+    if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isMinimizable()) {
+      mainWindow.minimize()
+      return true
+    }
+    return false
+  })
+
   ipcMain.handle('updates:check', async () => checkForUpdates(app.getVersion()))
 
   ipcMain.handle('bilibili:auth-status', async () => getBilibiliAuthStatus())

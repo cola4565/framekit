@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react'
 import {
   AlertCircle,
   Check,
@@ -9,6 +10,8 @@ import {
 } from 'lucide-react'
 import type { DownloadProgress } from '../shared/types'
 import { formatBytes, formatSpeed, kindMeta, percentOf } from '../shared/format'
+
+const DRAWER_EXIT_MS = 220
 
 interface DownloadDrawerProps {
   open: boolean
@@ -47,14 +50,57 @@ export default function DownloadDrawer({
   onRemove,
   onClearFinished
 }: DownloadDrawerProps): React.JSX.Element | null {
-  if (!open) return null
+  const drawerRef = useRef<HTMLElement>(null)
+  const [mounted, setMounted] = useState(open)
+  const [closing, setClosing] = useState(false)
+
+  useEffect(() => {
+    if (open) {
+      setMounted(true)
+      setClosing(false)
+      return
+    }
+    setClosing(true)
+    const timer = window.setTimeout(() => setMounted(false), DRAWER_EXIT_MS)
+    return () => window.clearTimeout(timer)
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return
+    const previousFocus = document.activeElement as HTMLElement | null
+    const focusFrame = window.requestAnimationFrame(() => {
+      drawerRef.current?.querySelector<HTMLButtonElement>('button')?.focus()
+    })
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      window.cancelAnimationFrame(focusFrame)
+      window.removeEventListener('keydown', onKeyDown)
+      previousFocus?.focus()
+    }
+  }, [onClose, open])
+
+  if (!mounted) return null
   const activeCount = tasks.filter((task) => ['queued', 'downloading'].includes(task.status)).length
   const finishedCount = tasks.length - activeCount
 
   return (
     <>
-      <div className="drawer-scrim" onClick={onClose} role="presentation" />
-      <aside className="download-drawer" aria-label="下载队列">
+      <div
+        className={`drawer-scrim${closing ? ' is-closing' : ''}`}
+        onClick={onClose}
+        role="presentation"
+      />
+      <aside
+        ref={drawerRef}
+        id="download-queue"
+        className={`download-drawer${closing ? ' is-closing' : ''}`}
+        aria-label="下载队列"
+        role="dialog"
+        aria-modal="true"
+      >
         <header className="drawer-header">
           <div className="drawer-title">
             <span className="drawer-icon">

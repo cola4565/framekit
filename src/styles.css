@@ -260,6 +260,40 @@ label:focus-within {
   background: var(--accent);
 }
 
+.window-control-divider {
+  width: 1px;
+  height: 18px;
+  margin-left: 2px;
+  background: var(--line);
+}
+
+.window-control-button {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+  transition:
+    color 160ms ease,
+    border-color 160ms ease,
+    background 160ms ease;
+}
+
+.window-control-button:hover {
+  border-color: var(--line);
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.055);
+}
+
+.window-control-button:active {
+  transform: translateY(1px);
+}
+
 .update-check-button.has-update {
   border-color: rgba(255, 106, 61, 0.3);
   color: var(--accent-light);
@@ -2507,6 +2541,11 @@ label:focus-within {
   animation: fadeIn 160ms ease both;
 }
 
+.drawer-scrim.is-closing {
+  pointer-events: none;
+  animation: fadeOut 200ms ease both;
+}
+
 .download-drawer {
   position: fixed;
   z-index: 90;
@@ -2521,12 +2560,31 @@ label:focus-within {
     radial-gradient(420px 220px at 100% 0%, rgba(255, 106, 61, 0.07), transparent 70%),
     #0d0f14;
   box-shadow: -25px 0 70px rgba(0, 0, 0, 0.44);
-  animation: drawerIn 240ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation: drawerIn 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  will-change: transform;
 }
 
 @keyframes drawerIn {
   from {
-    transform: translateX(30px);
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+
+.download-drawer.is-closing {
+  pointer-events: none;
+  animation: drawerOut 220ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+@keyframes drawerOut {
+  to {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+}
+
+@keyframes fadeOut {
+  to {
     opacity: 0;
   }
 }
@@ -2606,6 +2664,20 @@ label:focus-within {
   gap: 9px;
   padding: 11px 9px;
   border-bottom: 1px solid var(--line);
+  border-radius: 9px;
+  animation: queueItemIn 220ms ease both;
+  transition: background 150ms ease;
+}
+
+.queue-item:hover {
+  background: rgba(255, 255, 255, 0.022);
+}
+
+@keyframes queueItemIn {
+  from {
+    opacity: 0;
+    transform: translateY(-5px);
+  }
 }
 
 .queue-kind {
@@ -2790,6 +2862,7 @@ label:focus-within {
   box-shadow: 0 15px 45px rgba(0, 0, 0, 0.48);
   backdrop-filter: blur(18px);
   animation: toastIn 220ms ease both;
+  transition: right 260ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .toast.with-drawer {

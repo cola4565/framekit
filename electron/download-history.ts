@@ -9,6 +9,7 @@ const MAX_RECORDS = 200
 export class DownloadHistory {
   private items: DownloadProgress[] = []
   private saveTimer: NodeJS.Timeout | null = null
+  private saveQueue: Promise<void> = Promise.resolve()
 
   private get file(): string {
     return join(app.getPath('userData'), 'download-history.json')
@@ -71,12 +72,20 @@ export class DownloadHistory {
   }
 
   async flush(): Promise<void> {
-    try {
-      await mkdir(dirname(this.file), { recursive: true })
-      await writeFile(this.file, JSON.stringify(this.items, null, 2), 'utf8')
-    } catch {
-      // History persistence is best-effort.
+    if (this.saveTimer) {
+      clearTimeout(this.saveTimer)
+      this.saveTimer = null
     }
+    const snapshot = JSON.stringify(this.items, null, 2)
+    this.saveQueue = this.saveQueue.then(async () => {
+      try {
+        await mkdir(dirname(this.file), { recursive: true })
+        await writeFile(this.file, snapshot, 'utf8')
+      } catch {
+        // History persistence is best-effort.
+      }
+    })
+    await this.saveQueue
   }
 
   flushSync(): void {

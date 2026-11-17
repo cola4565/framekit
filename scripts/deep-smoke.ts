@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { app } from 'electron'
-import { sniffPage } from '../electron/sniffer'
+import { parsePage } from '../electron/parser'
 
 const page = `<!doctype html>
 <html lang="en">
@@ -17,6 +17,7 @@ const page = `<!doctype html>
   </head>
   <body>
     <h1>Dynamic resource fixture</h1>
+    <img src="/static/existing.png" alt="Static resource" />
     <div class="spacer"></div>
     <script>
       setTimeout(() => {
@@ -56,6 +57,11 @@ async function main(): Promise<void> {
     if (request.url === '/') {
       response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' })
       response.end(page)
+      return
+    }
+    if (request.url === '/static/existing.png') {
+      response.writeHead(200, { 'content-type': 'image/png', 'content-length': '600' })
+      response.end(Buffer.alloc(600, 5))
       return
     }
     if (request.url?.startsWith('/dynamic/late-image.png')) {
@@ -99,7 +105,7 @@ async function main(): Promise<void> {
   const origin = `http://127.0.0.1:${address.port}`
 
   try {
-    const result = await sniffPage(`${origin}/`, (progress) => {
+    const result = await parsePage(`${origin}/`, { deep: true }, (progress) => {
       console.log(`[${progress.percent}%] ${progress.message}`)
     })
     const paths = result.resources.map((resource) => new URL(resource.url).pathname)
@@ -108,7 +114,8 @@ async function main(): Promise<void> {
       '/dynamic/late-image.png',
       '/dynamic/late-video.mp4',
       '/dynamic/late-audio.mp3',
-      '/dynamic/late-bg.webp'
+      '/dynamic/late-bg.webp',
+      '/static/existing.png'
     ]) {
       assert.ok(paths.includes(expected), `missing dynamically loaded resource ${expected}`)
     }

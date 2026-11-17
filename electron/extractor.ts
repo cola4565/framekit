@@ -382,7 +382,8 @@ function mergeResource(existing: MediaResource, incoming: MediaResource): MediaR
     qualityId: existing.qualityId ?? incoming.qualityId,
     qualityLabel: existing.qualityLabel ?? incoming.qualityLabel,
     codec: existing.codec ?? incoming.codec,
-    mergeAudio: existing.mergeAudio || incoming.mergeAudio
+    mergeAudio: existing.mergeAudio || incoming.mergeAudio,
+    groupId: existing.groupId ?? incoming.groupId
   }
 }
 

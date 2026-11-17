@@ -8,6 +8,7 @@ import type { DownloadProgress } from '../src/shared/types'
 
 const payloadA = Buffer.alloc(96 * 1024, 7)
 const payloadB = Buffer.from('FrameKit download fixture')
+let cancelTimer: NodeJS.Timeout | undefined
 
 async function main(): Promise<void> {
   const server = createServer((request, response) => {
@@ -26,6 +27,17 @@ async function main(): Promise<void> {
         'content-disposition': "attachment; filename*=UTF-8''frame%20b.bin"
       })
       response.end(payloadB)
+      return
+    }
+    if (request.url === '/slow-cancel.mp4') {
+      response.writeHead(200, {
+        'content-type': 'video/mp4',
+        'content-length': String(payloadA.byteLength * 100)
+      })
+      cancelTimer = setInterval(() => response.write(payloadA), 20)
+      request.on('close', () => {
+        if (cancelTimer) clearInterval(cancelTimer)
+      })
       return
     }
     response.writeHead(404)
@@ -92,9 +104,27 @@ async function main(): Promise<void> {
     assert.equal(downloadedA.byteLength, payloadA.byteLength)
     assert.equal(downloadedB.toString(), payloadB.toString())
 
+    await manager.enqueue(
+      [{
+        id: 'cancel-remove',
+        url: `${origin}/slow-cancel.mp4`,
+        filename: 'cancel-remove.mp4',
+        kind: 'video',
+        pageUrl: origin
+      }],
+      destination
+    )
+    while (!updates.some((update) => update.id === 'cancel-remove' && update.received > 0)) {
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, 20))
+    }
+    const removal = await manager.remove('cancel-remove')
+    assert.equal(removal.removed, true)
+    assert.equal(updates.some((update) => update.id === 'cancel-remove' && update.status === 'done'), false)
+
     console.log('PASS download smoke')
     console.log(JSON.stringify({ destination, files: [fileA.filename, fileB.filename] }, null, 2))
   } finally {
+    if (cancelTimer) clearInterval(cancelTimer)
     await new Promise<void>((resolve, reject) =>
       server.close((error) => (error ? reject(error) : resolve()))
     )

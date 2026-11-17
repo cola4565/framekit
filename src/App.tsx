@@ -13,6 +13,7 @@ import {
   Layers,
   Loader2,
   LogIn,
+  Minus,
   Music,
   RefreshCw,
   Search,
@@ -416,6 +417,25 @@ export default function App(): React.JSX.Element {
     void window.framekit.cancelDownload(id)
   }
 
+  const closeQueue = useCallback(() => setQueueOpen(false), [])
+
+  const minimizeWindow = useCallback(async (): Promise<void> => {
+    const minimize = window.framekit.minimizeWindow
+    if (typeof minimize !== 'function') {
+      if (window.framekit.platform === 'darwin') {
+        notify('请使用窗口左上角的原生最小化按钮', 'info')
+      } else {
+        notify('请重启 FrameKit 后使用窗口最小化', 'info')
+      }
+      return
+    }
+    try {
+      await minimize.call(window.framekit)
+    } catch (minimizeError) {
+      notify(errorMessage(minimizeError), 'error')
+    }
+  }, [notify])
+
   const handleRemoveDownload = useCallback(
     async (id: string): Promise<void> => {
       const removeDownload = window.framekit.removeDownload
@@ -519,11 +539,23 @@ export default function App(): React.JSX.Element {
           <button
             type="button"
             className={`appbar-button queue-button${queueOpen ? ' is-active' : ''}`}
-            onClick={() => setQueueOpen(true)}
+            onClick={() => setQueueOpen((current) => !current)}
+            aria-expanded={queueOpen}
+            aria-controls="download-queue"
           >
             <Download size={15} />
             <span>{downloadMenuLabel}</span>
             {activeDownloads > 0 && <b className="queue-badge">{activeDownloads}</b>}
+          </button>
+          <span className="window-control-divider" />
+          <button
+            type="button"
+            className="window-control-button"
+            onClick={() => void minimizeWindow()}
+            title={window.framekit.platform === 'darwin' ? '最小化（也可使用左上角红绿灯）' : '最小化'}
+            aria-label="最小化窗口"
+          >
+            <Minus size={16} />
           </button>
         </div>
       </header>
@@ -943,7 +975,7 @@ export default function App(): React.JSX.Element {
         open={queueOpen}
         tasks={downloads}
         destination={destination}
-        onClose={() => setQueueOpen(false)}
+        onClose={closeQueue}
         onChooseDirectory={() => void chooseDirectory()}
         onReveal={handleReveal}
         onCancel={handleCancelDownload}
