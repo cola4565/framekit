@@ -8,8 +8,10 @@ import {
   dialog,
   ipcMain,
   Menu,
+  nativeImage,
   session,
-  shell
+  shell,
+  Tray
 } from 'electron'
 import type { MenuItemConstructorOptions } from 'electron'
 import type { DownloadRequest, ParseOptions } from '../src/shared/types'
@@ -22,6 +24,10 @@ import { checkForUpdates } from './updater'
 
 const isMac = process.platform === 'darwin'
 let mainWindow: BrowserWindow | null = null
+let appQuitting = false
+let tray: Tray | null = null
+let trayNoticeShown = false
+let closePromptReady = false
 
 registerMediaScheme()
 
@@ -37,6 +43,72 @@ const downloadManager = new DownloadManager((progress) => {
     mainWindow.webContents.send('download:progress', progress)
   }
 })
+
+function showMainWindow(): void {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    createWindow()
+    return
+  }
+  if (isMac) void app.dock?.show()
+  if (mainWindow.isMinimized()) mainWindow.restore()
+  mainWindow.show()
+  mainWindow.focus()
+}
+
+function ensureTray(): boolean {
+  if (tray) return true
+  try {
+    const iconPath = app.isPackaged
+      ? join(process.resourcesPath, isMac ? 'trayTemplate.png' : 'tray.ico')
+      : join(app.getAppPath(), 'assets', isMac ? 'trayTemplate.png' : 'icon.ico')
+    const icon = nativeImage.createFromPath(iconPath)
+    if (icon.isEmpty()) throw new Error(`托盘图标为空：${iconPath}`)
+    if (isMac) icon.setTemplateImage(true)
+    tray = new Tray(icon)
+    tray.setToolTip('FrameKit 后期工具箱')
+    tray.setContextMenu(
+      Menu.buildFromTemplate([
+        { label: '显示主窗口', click: showMainWindow },
+        { type: 'separator' },
+        { label: '退出 FrameKit', click: () => app.quit() }
+      ])
+    )
+    if (!isMac) tray.on('click', showMainWindow)
+    tray.on('double-click', showMainWindow)
+    if (!app.isPackaged) {
+      console.log('Tray created:', iconPath, tray.getBounds())
+    }
+    return true
+  } catch (error) {
+    console.error('Failed to create tray icon:', error)
+    tray?.destroy()
+    tray = null
+    return false
+  }
+}
+
+function hideToTray(): void {
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  if (!ensureTray()) {
+    if (!mainWindow.isMinimized()) mainWindow.minimize()
+    return
+  }
+  if (isMac) app.dock?.hide()
+  mainWindow.hide()
+  if (process.platform === 'win32' && !trayNoticeShown && tray) {
+    trayNoticeShown = true
+    try {
+      tray.displayBalloon({
+        title: 'FrameKit 仍在后台运行',
+        content: '图标在右下角系统托盘，左键恢复窗口，右键可退出。',
+        iconType: 'info',
+        noSound: true
+      })
+    } catch {
+      // 系统通知被禁用时不影响最小化。
+    }
+  }
+}
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -78,8 +150,23 @@ function createWindow(): void {
     return { action: 'deny' }
   })
 
+  mainWindow.webContents.on('did-start-loading', () => {
+    closePromptReady = false
+  })
+
+  mainWindow.on('close', (event) => {
+    if (appQuitting || !mainWindow || mainWindow.webContents.isDestroyed()) return
+    if (!closePromptReady || mainWindow.webContents.isLoadingMainFrame()) return
+    event.preventDefault()
+    mainWindow.webContents.send('window:close-request')
+  })
+
   mainWindow.on('closed', () => {
     mainWindow = null
+  })
+
+  mainWindow.on('minimize', () => {
+    if (!isMac) hideToTray()
   })
 
   if (!app.isPackaged && process.env.ELECTRON_RENDERER_URL) {
@@ -150,9 +237,17 @@ function buildMenu(): void {
 function registerIpc(): void {
   ipcMain.handle('app:get-version', async () => app.getVersion())
 
-  ipcMain.handle('window:minimize', async () => {
-    if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isMinimizable()) {
-      mainWindow.minimize()
+  ipcMain.on('window:close-ready', () => {
+    closePromptReady = true
+  })
+
+  ipcMain.handle('window:close-action', async (_event, action: unknown) => {
+    if (action === 'minimize') {
+      hideToTray()
+      return true
+    }
+    if (action === 'quit') {
+      app.quit()
       return true
     }
     return false
@@ -295,10 +390,7 @@ if (!hasLock) {
   app.quit()
 } else {
   app.on('second-instance', () => {
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore()
-      mainWindow.focus()
-    }
+    showMainWindow()
   })
 
   app.whenReady().then(async () => {
@@ -313,9 +405,10 @@ if (!hasLock) {
     buildMenu()
     registerIpc()
     createWindow()
+    ensureTray()
 
     app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length === 0) createWindow()
+      showMainWindow()
     })
   })
 
@@ -324,6 +417,9 @@ if (!hasLock) {
   })
 
   app.on('before-quit', () => {
+    appQuitting = true
+    tray?.destroy()
+    tray = null
     downloadHistory.flushSync()
   })
 }

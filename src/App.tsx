@@ -13,7 +13,6 @@ import {
   Layers,
   Loader2,
   LogIn,
-  Minus,
   Music,
   RefreshCw,
   Search,
@@ -21,6 +20,7 @@ import {
   Zap
 } from 'lucide-react'
 import DownloadDrawer from './components/DownloadDrawer'
+import CloseConfirmModal from './components/CloseConfirmModal'
 import EmptyState from './components/EmptyState'
 import PreviewModal from './components/PreviewModal'
 import ResourceCard from './components/ResourceCard'
@@ -92,6 +92,7 @@ export default function App(): React.JSX.Element {
   const [preview, setPreview] = useState<MediaResource | null>(null)
   const [destination, setDestination] = useState(readSavedPath)
   const [queueOpen, setQueueOpen] = useState(false)
+  const [closePromptOpen, setClosePromptOpen] = useState(false)
   const [downloads, setDownloads] = useState<DownloadProgress[]>([])
   const removedDownloadIds = useRef<Set<string>>(new Set())
   const downloadsRef = useRef<DownloadProgress[]>([])
@@ -188,6 +189,12 @@ export default function App(): React.JSX.Element {
         return updated
       })
     })
+  }, [])
+
+  useEffect(() => {
+    const onCloseRequest = window.framekit.onCloseRequest
+    if (typeof onCloseRequest !== 'function') return
+    return onCloseRequest(() => setClosePromptOpen(true))
   }, [])
 
   useEffect(() => {
@@ -419,22 +426,26 @@ export default function App(): React.JSX.Element {
 
   const closeQueue = useCallback(() => setQueueOpen(false), [])
 
-  const minimizeWindow = useCallback(async (): Promise<void> => {
-    const minimize = window.framekit.minimizeWindow
-    if (typeof minimize !== 'function') {
-      if (window.framekit.platform === 'darwin') {
-        notify('请使用窗口左上角的原生最小化按钮', 'info')
-      } else {
-        notify('请重启 FrameKit 后使用窗口最小化', 'info')
-      }
+  const handleCloseAction = useCallback(async (action: 'minimize' | 'quit'): Promise<void> => {
+    const respondToClose = window.framekit.respondToClose
+    if (typeof respondToClose !== 'function') {
+      notify('请重启 FrameKit 后再关闭窗口', 'error')
       return
     }
+    setClosePromptOpen(false)
     try {
-      await minimize.call(window.framekit)
-    } catch (minimizeError) {
-      notify(errorMessage(minimizeError), 'error')
+      const handled = await respondToClose.call(window.framekit, action)
+      if (!handled) {
+        setClosePromptOpen(true)
+        notify('当前窗口无法执行该操作', 'error')
+      }
+    } catch (closeError) {
+      setClosePromptOpen(true)
+      notify(errorMessage(closeError), 'error')
     }
   }, [notify])
+
+  const cancelClosePrompt = useCallback(() => setClosePromptOpen(false), [])
 
   const handleRemoveDownload = useCallback(
     async (id: string): Promise<void> => {
@@ -546,16 +557,6 @@ export default function App(): React.JSX.Element {
             <Download size={15} />
             <span>{downloadMenuLabel}</span>
             {activeDownloads > 0 && <b className="queue-badge">{activeDownloads}</b>}
-          </button>
-          <span className="window-control-divider" />
-          <button
-            type="button"
-            className="window-control-button"
-            onClick={() => void minimizeWindow()}
-            title={window.framekit.platform === 'darwin' ? '最小化（也可使用左上角红绿灯）' : '最小化'}
-            aria-label="最小化窗口"
-          >
-            <Minus size={16} />
           </button>
         </div>
       </header>
@@ -1018,6 +1019,15 @@ export default function App(): React.JSX.Element {
             notify('安装包下载已在浏览器中打开', 'success')
           }}
           onOpenRelease={(targetUrl) => void openExternal(targetUrl)}
+        />
+      )}
+
+      {closePromptOpen && (
+        <CloseConfirmModal
+          activeDownloads={activeDownloads}
+          onMinimize={() => void handleCloseAction('minimize')}
+          onQuit={() => void handleCloseAction('quit')}
+          onCancel={cancelClosePrompt}
         />
       )}
 

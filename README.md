@@ -4,7 +4,7 @@
 
 支持 Windows 与 macOS，基于 Electron + React + TypeScript 构建，解析与下载全部在本机完成。
 
-当前正式版：**v1.1.1**
+当前正式版：**v1.1.2**
 
 ![FrameKit 素材解析界面](docs/screenshot-results.png)
 
@@ -12,9 +12,9 @@
 
 ## 下载
 
-- [FrameKit 1.1.1 · Windows x64 安装包](https://github.com/cola4565/framekit/releases/download/v1.1.1/FrameKit-1.1.1-Windows-x64.exe)
-- [FrameKit 1.1.1 · macOS Apple Silicon](https://github.com/cola4565/framekit/releases/download/v1.1.1/FrameKit-1.1.1-macOS-arm64.dmg)
-- [FrameKit 1.1.1 · macOS Intel](https://github.com/cola4565/framekit/releases/download/v1.1.1/FrameKit-1.1.1-macOS-x64.dmg)
+- [FrameKit 1.1.2 · Windows x64 安装包](https://github.com/cola4565/framekit/releases/download/v1.1.2/FrameKit-1.1.2-Windows-x64.exe)
+- [FrameKit 1.1.2 · macOS Apple Silicon](https://github.com/cola4565/framekit/releases/download/v1.1.2/FrameKit-1.1.2-macOS-arm64.dmg)
+- [FrameKit 1.1.2 · macOS Intel](https://github.com/cola4565/framekit/releases/download/v1.1.2/FrameKit-1.1.2-macOS-x64.dmg)
 - [全部版本与更新说明](https://github.com/cola4565/framekit/releases)
 
 安装包暂未配置商业代码签名证书，首次运行时系统可能提示未知开发者。
@@ -29,6 +29,7 @@
 - **下载队列管理**：记录本地持久化，可逐条删除（同时删除磁盘文件）、清空列表、定位文件；磁盘文件被外部删除后会在队列中标记“文件已在磁盘上删除”。
 - **Bilibili 专用解析**：读取账号可用的清晰度列表（含大会员 4K/1080P+ 等），分别下载独立视频流与音频流，并用内置 ffmpeg 自动合并为标准 MP4。
 - **应用内更新检查**：右上角“检查更新”读取 GitHub 最新正式版，比较版本并直达对应平台的安装包。
+- **后台运行**：关闭窗口时选择最小化到系统托盘 / 菜单栏，下载任务继续执行；托盘右键可直接退出。
 - **跨平台打包**：Windows NSIS 安装包与 macOS DMG 配置；应用图标已生成。
 
 > 请只下载和使用你有权访问、保存的内容，并遵守目标网站的服务条款与版权要求。

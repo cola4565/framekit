@@ -11,7 +11,8 @@ import {
 import type { DownloadProgress } from '../shared/types'
 import { formatBytes, formatSpeed, kindMeta, percentOf } from '../shared/format'
 
-const DRAWER_EXIT_MS = 220
+const DRAWER_EXIT_MS = 260
+const DRAWER_ENTER_MS = 420
 
 interface DownloadDrawerProps {
   open: boolean
@@ -52,16 +53,22 @@ export default function DownloadDrawer({
 }: DownloadDrawerProps): React.JSX.Element | null {
   const drawerRef = useRef<HTMLElement>(null)
   const [mounted, setMounted] = useState(open)
-  const [closing, setClosing] = useState(false)
+  const [entering, setEntering] = useState(open)
+  const mountedRef = useRef(open)
 
   useEffect(() => {
     if (open) {
+      if (!mountedRef.current) setEntering(true)
+      mountedRef.current = true
       setMounted(true)
-      setClosing(false)
-      return
+      const timer = window.setTimeout(() => setEntering(false), DRAWER_ENTER_MS)
+      return () => window.clearTimeout(timer)
     }
-    setClosing(true)
-    const timer = window.setTimeout(() => setMounted(false), DRAWER_EXIT_MS)
+    setEntering(false)
+    const timer = window.setTimeout(() => {
+      mountedRef.current = false
+      setMounted(false)
+    }, DRAWER_EXIT_MS)
     return () => window.clearTimeout(timer)
   }, [open])
 
@@ -89,15 +96,16 @@ export default function DownloadDrawer({
   return (
     <>
       <div
-        className={`drawer-scrim${closing ? ' is-closing' : ''}`}
+        className={`drawer-scrim${open ? ' is-open' : ''}`}
         onClick={onClose}
         role="presentation"
       />
       <aside
         ref={drawerRef}
         id="download-queue"
-        className={`download-drawer${closing ? ' is-closing' : ''}`}
+        className={`download-drawer${open ? ' is-open' : ''}${entering ? ' is-entering' : ''}`}
         aria-label="下载队列"
+        aria-hidden={!open}
         role="dialog"
         aria-modal="true"
       >

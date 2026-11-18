@@ -123,10 +123,13 @@ export interface UpdateCheckResult {
   downloadName: string | null
 }
 
+export type WindowCloseAction = 'minimize' | 'quit'
+
 export interface FramekitApi {
   platform: NodeJS.Platform
   getAppVersion: () => Promise<string>
-  minimizeWindow?: () => Promise<void>
+  respondToClose?: (action: WindowCloseAction) => Promise<boolean>
+  onCloseRequest?: (callback: () => void) => () => void
   checkForUpdates: () => Promise<UpdateCheckResult>
   getBilibiliAuthStatus: () => Promise<boolean>
   loginBilibili: () => Promise<boolean>

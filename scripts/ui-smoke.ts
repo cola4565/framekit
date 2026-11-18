@@ -174,7 +174,10 @@ async function main(): Promise<void> {
     kind: 'other',
     pageUrl: 'http://127.0.0.1:8787/demo'
   }], ${JSON.stringify(downloadDirectory)})`)
-  await evaluate("document.querySelector('.queue-button').click()")
+  await evaluate(`(() => {
+    const trigger = document.querySelector('.queue-button');
+    if (trigger?.getAttribute('aria-expanded') !== 'true') trigger?.click();
+  })()`)
   await new Promise((resolveDelay) => setTimeout(resolveDelay, 350))
   const drawerInteraction = await evaluate(`(async () => {
     const trigger = document.querySelector('.queue-button');
@@ -182,7 +185,8 @@ async function main(): Promise<void> {
     const initial = {
       expanded: trigger?.getAttribute('aria-expanded'),
       focused: document.activeElement?.getAttribute('aria-label'),
-      entering: drawer ? getComputedStyle(drawer).animationName : ''
+      opened: drawer?.classList.contains('is-open') || false,
+      transition: drawer ? getComputedStyle(drawer).transitionProperty : ''
     };
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
@@ -190,20 +194,25 @@ async function main(): Promise<void> {
     const closing = document.querySelector('.download-drawer');
     const result = {
       ...initial,
-      closing: closing?.classList.contains('is-closing') || false,
-      exiting: closing ? getComputedStyle(closing).animationName : ''
+      closing: closing ? !closing.classList.contains('is-open') : false,
+      hidden: closing?.getAttribute('aria-hidden') === 'true'
     };
-    await new Promise((resolve) => setTimeout(resolve, 260));
+    await new Promise((resolve) => setTimeout(resolve, 400));
     return { ...result, removed: !document.querySelector('.download-drawer') };
   })()`)
   if (
     !drawerInteraction ||
     typeof drawerInteraction !== 'object' ||
+    !('opened' in drawerInteraction) ||
+    !drawerInteraction.opened ||
     !('closing' in drawerInteraction) ||
     !drawerInteraction.closing ||
+    !('hidden' in drawerInteraction) ||
+    !drawerInteraction.hidden ||
     !('removed' in drawerInteraction) ||
     !drawerInteraction.removed
   ) {
+    console.error('Drawer interaction:', drawerInteraction)
     throw new Error('下载抽屉的 Esc 退出动画或卸载没有生效')
   }
   await evaluate("document.querySelector('.queue-button').click()")
@@ -254,10 +263,6 @@ async function main(): Promise<void> {
   console.log(JSON.stringify(detail, null, 2))
   console.log(`Screenshot: ${screenshotPath}`)
   console.log(`Queue screenshot: ${queueScreenshotPath}`)
-  const minimizeResult = await evaluate(`window.framekit.minimizeWindow
-    ? window.framekit.minimizeWindow().then(() => 'ok')
-    : Promise.resolve('unavailable')`)
-  if (minimizeResult !== 'ok') throw new Error('最小化窗口 IPC 调用失败')
   socket.close()
 }
 

@@ -13,7 +13,13 @@ import type {
 const api: FramekitApi = {
   platform: process.platform,
   getAppVersion: (): Promise<string> => ipcRenderer.invoke('app:get-version'),
-  minimizeWindow: (): Promise<void> => ipcRenderer.invoke('window:minimize'),
+  respondToClose: (action): Promise<boolean> => ipcRenderer.invoke('window:close-action', action),
+  onCloseRequest: (callback) => {
+    const listener = (): void => callback()
+    ipcRenderer.on('window:close-request', listener)
+    ipcRenderer.send('window:close-ready')
+    return () => ipcRenderer.removeListener('window:close-request', listener)
+  },
   checkForUpdates: (): Promise<UpdateCheckResult> => ipcRenderer.invoke('updates:check'),
   getBilibiliAuthStatus: (): Promise<boolean> => ipcRenderer.invoke('bilibili:auth-status'),
   loginBilibili: (): Promise<boolean> => ipcRenderer.invoke('bilibili:login'),

@@ -1,6 +1,6 @@
 {
   "name": "framekit",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "private": true,
   "description": "FrameKit - a cross-platform toolkit for video editors and post-production artists.",
   "main": "out/main/index.js",
@@ -54,6 +54,20 @@
       "output": "release",
       "buildResources": "assets"
     },
+    "extraResources": [
+      {
+        "from": "assets/icon.ico",
+        "to": "tray.ico"
+      },
+      {
+        "from": "assets/trayTemplate.png",
+        "to": "trayTemplate.png"
+      },
+      {
+        "from": "assets/trayTemplate@2x.png",
+        "to": "trayTemplate@2x.png"
+      }
+    ],
     "files": [
       "out/**/*",
       "package.json"
