@@ -1,6 +1,6 @@
 {
   "name": "framekit",
-  "version": "1.1.2",
+  "version": "1.2.0",
   "private": true,
   "description": "FrameKit - a cross-platform toolkit for video editors and post-production artists.",
   "main": "out/main/index.js",
@@ -10,7 +10,8 @@
     "dev": "electron-vite dev",
     "start": "electron-vite preview",
     "typecheck": "tsc --noEmit",
-    "build": "npm run typecheck && electron-vite build",
+    "clean:build": "node scripts/clean-build.mjs",
+    "build": "npm run clean:build && npm run typecheck && electron-vite build",
     "dist": "npm run build && electron-builder --publish never",
     "dist:win": "npm run build && electron-builder --win --publish never",
     "dist:mac": "npm run build && electron-builder --mac --publish never",
@@ -24,21 +25,21 @@
     "release:github": "node scripts/github-release.mjs"
   },
   "dependencies": {
-    "cheerio": "^1.2.0",
-    "ffmpeg-static": "^5.3.0",
-    "lucide-react": "^1.73.0",
-    "react": "^19.3.1",
-    "react-dom": "^19.3.1"
+    "ffmpeg-static": "^5.3.0"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.3.0",
-    "electron": "^45.3.3",
+    "cheerio": "^1.2.0",
+    "electron": "^45.4.1",
     "electron-builder": "^26.18.0",
     "electron-vite": "^6.0.0",
     "esbuild": "^0.28.2",
+    "lucide-react": "^1.73.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3",
     "vite": "^8.3.8"
@@ -46,7 +47,13 @@
   "build": {
     "appId": "com.framekit.desktop",
     "productName": "FrameKit",
+    "compression": "maximum",
+    "electronLanguages": [
+      "zh-CN",
+      "en-US"
+    ],
     "asar": true,
+    "npmRebuild": false,
     "asarUnpack": [
       "node_modules/ffmpeg-static/**"
     ],
@@ -87,6 +94,7 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
+      "deleteAppDataOnUninstall": false,
       "createDesktopShortcut": true,
       "shortcutName": "FrameKit"
     },

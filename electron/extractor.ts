@@ -175,6 +175,7 @@ export interface Candidate {
   hint?: ResourceKind
   source: DiscoverySource
   discoveryLabel: string
+  filename?: string
   label?: string
   mime?: string
   size?: number
@@ -225,6 +226,60 @@ function decodeEscapedUrl(value: string): string {
     .replace(/\\u003f/gi, '?')
     .replace(/\\\//g, '/')
     .replace(/&amp;/g, '&')
+}
+
+function decodeBase64Url(value: string | undefined): string | null {
+  if (!value) return null
+  const cleaned = value.replace(/\s+/g, '')
+  if (cleaned.length < 16 || !/^[A-Za-z0-9+/=_-]+$/.test(cleaned)) return null
+  try {
+    const normalized = cleaned.replace(/-/g, '+').replace(/_/g, '/')
+    const decoded = Buffer.from(normalized, 'base64').toString('utf8').trim()
+    return /^https?:\/\//i.test(decoded) ? decoded : null
+  } catch {
+    return null
+  }
+}
+
+interface AigeiPageContext {
+  kind: 'search' | 'item'
+  searchType?: string
+}
+
+function aigeiPageContext(pageUrl: string): AigeiPageContext | null {
+  try {
+    const parsed = new URL(pageUrl)
+    const hostname = parsed.hostname.toLowerCase()
+    if (hostname !== 'aigei.com' && !hostname.endsWith('.aigei.com')) return null
+    if (parsed.pathname.startsWith('/item/')) return { kind: 'item' }
+    if (parsed.pathname === '/s' || parsed.pathname === '/s/') {
+      return { kind: 'search', searchType: parsed.searchParams.get('type') ?? '' }
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
+function aigeiItemTitle($: ReturnType<typeof load>, fallback: string): string {
+  const title =
+    $('.item-view-box .title-box .title-link b').first().text().trim() ||
+    $('.item-view-box .title-box .title-link').first().attr('title')?.trim() ||
+    fallback
+  return title.replace(/\s*[-_]\s*(?:视频|爱剪辑|ae|会声会影|特效素材下载).*$/i, '').trim()
+}
+
+function aigeiSourceFacts(description: string | undefined): string {
+  const text = description ?? ''
+  const resolution = /分辨率\s*[:：]?\s*([0-9]+\s*[x×]\s*[0-9]+)/i
+    .exec(text)?.[1]
+    ?.replace(/\s+/g, '')
+  const duration = /时长\s*[:：]?\s*([0-9.]+)\s*(?:秒|s)/i.exec(text)?.[1]
+  const format = /格式\s*[:：]?\s*([a-z0-9]+)/i.exec(text)?.[1]?.toUpperCase()
+  const size = /体积\s*[:：]?\s*([0-9.]+\s*[kmgt]?b?)/i.exec(text)?.[1]
+  return [resolution ? `原片 ${resolution}` : '', duration ? `${duration} 秒` : '', format, size]
+    .filter(Boolean)
+    .join(' · ')
 }
 
 export function normalizeUrl(rawValue: string | undefined, baseUrl: string): string | null {
@@ -337,7 +392,9 @@ export function makeResource(candidate: Candidate, pageUrl: string): MediaResour
     kind: classified.kind,
     source: candidate.source,
     pageUrl,
-    filename: filenameFromUrl(candidate.url, classified.extension, classified.kind),
+    filename:
+      candidate.filename ??
+      filenameFromUrl(candidate.url, classified.extension, classified.kind),
     extension: classified.extension,
     mime: candidate.mime,
     size: candidate.size,
@@ -693,8 +750,10 @@ function extractHtmlResources(
 ): ParsedPage & { favicon?: string; stylesheetUrls: string[] } {
   const $ = load(html)
   const metadata = buildPageMetadata($)
+  const aigei = aigeiPageContext(pageUrl)
   const candidates = new Map<string, Candidate>()
   const warnings: string[] = []
+  let aigeiMainPreviewAdded = false
 
   const addCandidate = (
     candidate: Omit<Candidate, 'source' | 'discoveryLabel'> & {
@@ -719,6 +778,7 @@ function extractHtmlResources(
     candidates.set(resolved, {
       ...existing,
       hint: existing.hint ?? next.hint,
+      filename: existing.filename ?? next.filename,
       label: existing.label ?? next.label,
       mime: existing.mime ?? next.mime,
       size: existing.size ?? next.size,
@@ -858,6 +918,57 @@ function extractHtmlResources(
     }
   })
 
+  $('[fast-video-url], [data-fast-video-url]').each((_, element) => {
+    const attrs = attributesOf(element)
+    const decoded = decodeBase64Url(attrs['fast-video-url'] ?? attrs['data-fast-video-url'])
+    if (!decoded) return
+
+    const container = $(element).closest('.unit-container')
+    const dimensions = parseDimensions(attrs['fast-video-width'], attrs['fast-video-height'])
+    const previewSize =
+      dimensions.width && dimensions.height
+        ? `${dimensions.width}×${dimensions.height}`
+        : '低清'
+
+    if (aigei?.kind === 'item') {
+      if (container.length > 0 || aigeiMainPreviewAdded) return
+      aigeiMainPreviewAdded = true
+      const title = aigeiItemTitle($, metadata.title)
+      const facts = aigeiSourceFacts(metadata.description)
+      addCandidate({
+        url: decoded,
+        hint: 'video',
+        mime: 'video/mp4',
+        filename: title ? `${sanitizeFilename(title).slice(0, 90)}.mp4` : undefined,
+        label: `${title || '爱给网视频'} · ${previewSize} 预览${facts ? `（${facts}）` : ''}`,
+        ...dimensions,
+        source: 'html',
+        discoveryLabel: '爱给网预览 · 原片需登录站点下载'
+      })
+      return
+    }
+
+    const itemLink = container.find('a[href*="/item/"]').first()
+    const title =
+      itemLink.attr('title') ||
+      container.find('[title]').first().attr('title') ||
+      container.find('img[alt]').first().attr('alt') ||
+      undefined
+
+    addCandidate({
+      url: decoded,
+      hint: 'video',
+      mime: 'video/mp4',
+      filename: title
+        ? `${sanitizeFilename(title.replace(/\.[a-z0-9]{1,8}$/i, '')).slice(0, 90)}.mp4`
+        : undefined,
+      label: title?.trim() ? `${title.trim()} · ${previewSize} 预览` : undefined,
+      ...dimensions,
+      source: 'html',
+      discoveryLabel: '爱给网视频预览'
+    })
+  })
+
   $('audio').each((_, element) => {
     const attrs = attributesOf(element)
     for (const key of ['src', 'data-src', 'data-audio-src', 'data-url']) {
@@ -991,22 +1102,49 @@ function extractHtmlResources(
   })
 
   const stylesheetUrls: string[] = []
-  $('link[rel~="stylesheet"][href]').each((_, element) => {
-    const resolved = normalizeUrl(attributesOf(element).href, pageUrl)
-    if (resolved && stylesheetUrls.length < MAX_CSS_FILES && !stylesheetUrls.includes(resolved)) {
-      stylesheetUrls.push(resolved)
-    }
-  })
+  const skipStylesheets =
+    aigei?.kind === 'search' && aigei.searchType?.startsWith('video')
+  if (!skipStylesheets) {
+    $('link[rel~="stylesheet"][href]').each((_, element) => {
+      const resolved = normalizeUrl(attributesOf(element).href, pageUrl)
+      if (resolved && stylesheetUrls.length < MAX_CSS_FILES && !stylesheetUrls.includes(resolved)) {
+        stylesheetUrls.push(resolved)
+      }
+    })
+  }
 
-  const resources = sortResources(
+  let resources = sortResources(
     [...candidates.values()].map((candidate) => makeResource(candidate, pageUrl))
   )
+
+  if (aigei?.kind === 'search' && aigei.searchType?.startsWith('video')) {
+    resources = resources.filter((resource) => resource.kind === 'video')
+  } else if (aigei?.kind === 'item') {
+    const previews = resources.filter(
+      (resource) =>
+        resource.kind === 'video' &&
+        resource.discoveryLabel === '爱给网预览 · 原片需登录站点下载'
+    )
+    const poster = resources.find(
+      (resource) => resource.kind === 'image' && resource.discoveryLabel === 'Open Graph 图片'
+    )
+    resources = poster ? [...previews, poster] : previews
+  }
 
   if (resources.length === 0) {
     warnings.push('页面源码中没有发现直链媒体。可以尝试“深度嗅探”，它会执行页面脚本并监听网络请求。')
   }
   if (resources.length > MAX_RESOURCES) {
     warnings.push(`资源数量较多，仅保留前 ${MAX_RESOURCES} 项。`)
+  }
+  if (aigei?.kind === 'search' && aigei.searchType?.startsWith('video')) {
+    warnings.push(
+      '爱给网视频搜索结果只包含各条目的低清预览片段；完整原片需打开条目页并登录爱给网，本工具不会绕过登录或会员限制。'
+    )
+  } else if (aigei?.kind === 'item') {
+    warnings.push(
+      '爱给网条目页只公开低清预览片段；1080P 原片需要登录或会员权限，本工具不会绕过站点限制。'
+    )
   }
 
   return {
@@ -1108,6 +1246,11 @@ export async function parseStaticPage(
     }
     const cssResources = extraCandidates.map((candidate) => makeResource(candidate, finalUrl))
     parsed.resources = mergeResources(parsed.resources, cssResources).slice(0, MAX_RESOURCES)
+  }
+
+  const finalAigei = aigeiPageContext(finalUrl)
+  if (finalAigei?.kind === 'search' && finalAigei.searchType?.startsWith('video')) {
+    parsed.resources = parsed.resources.filter((resource) => resource.kind === 'video')
   }
 
   parsed.favicon = normalizeUrl(parsed.favicon, finalUrl) ?? undefined

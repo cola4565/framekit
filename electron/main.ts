@@ -15,9 +15,22 @@ import {
 } from 'electron'
 import type { MenuItemConstructorOptions } from 'electron'
 import type { DownloadRequest, ParseOptions } from '../src/shared/types'
+import {
+  getAigeiAuthStatus,
+  getAigeiCookieHeader,
+  isAigeiPageUrl,
+  loginAigei
+} from './aigei'
 import { getBilibiliAuthStatus, getBilibiliCookieHeader, loginBilibili } from './bilibili'
+import { clearRuntimeCaches } from './cache-cleanup'
 import { DownloadHistory } from './download-history'
 import { DownloadManager } from './downloader'
+import {
+  getDouyinAuthStatus,
+  getDouyinCookieHeader,
+  isDouyinPageUrl,
+  loginDouyin
+} from './douyin'
 import { installMediaProtocol, registerMediaScheme } from './media-protocol'
 import { parsePage } from './parser'
 import { checkForUpdates } from './updater'
@@ -259,6 +272,14 @@ function registerIpc(): void {
 
   ipcMain.handle('bilibili:login', async () => loginBilibili(mainWindow))
 
+  ipcMain.handle('aigei:auth-status', async () => getAigeiAuthStatus())
+
+  ipcMain.handle('aigei:login', async () => loginAigei(mainWindow))
+
+  ipcMain.handle('douyin:auth-status', async () => getDouyinAuthStatus())
+
+  ipcMain.handle('douyin:login', async () => loginDouyin(mainWindow))
+
   ipcMain.handle('parse:page', async (event, rawUrl: unknown, rawOptions: unknown) => {
     if (typeof rawUrl !== 'string') throw new Error('网址参数无效')
     const options: ParseOptions = {
@@ -281,7 +302,11 @@ function registerIpc(): void {
       if (!Array.isArray(rawRequests) || typeof rawDestination !== 'string') {
         throw new Error('下载参数无效')
       }
-      const cookie = await getBilibiliCookieHeader()
+      const [bilibiliCookie, douyinCookie, aigeiCookie] = await Promise.all([
+        getBilibiliCookieHeader(),
+        getDouyinCookieHeader(),
+        getAigeiCookieHeader()
+      ])
       const requests: DownloadRequest[] = []
       for (const item of rawRequests) {
         if (!item || typeof item !== 'object') continue
@@ -308,7 +333,12 @@ function registerIpc(): void {
               ? record.audioUrl
               : undefined,
           audioMime: typeof record.audioMime === 'string' ? record.audioMime : undefined,
-          cookie: cookie || undefined
+          cookie:
+            (isDouyinPageUrl(record.pageUrl)
+              ? douyinCookie
+              : isAigeiPageUrl(record.pageUrl)
+                ? aigeiCookie
+                : bilibiliCookie) || undefined
         })
       }
       return downloadManager.enqueue(requests, rawDestination)
@@ -406,6 +436,7 @@ if (!hasLock) {
     registerIpc()
     createWindow()
     ensureTray()
+    void clearRuntimeCaches()
 
     app.on('activate', () => {
       showMainWindow()
@@ -421,5 +452,6 @@ if (!hasLock) {
     tray?.destroy()
     tray = null
     downloadHistory.flushSync()
+    void clearRuntimeCaches()
   })
 }

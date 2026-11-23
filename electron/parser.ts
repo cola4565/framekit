@@ -11,6 +11,8 @@ import {
   validateAndNormalizePageUrl
 } from './extractor'
 import { extractBilibiliPage, isBilibiliVideoUrl } from './bilibili'
+import { extractDouyinPage, isDouyinVideoUrl } from './douyin'
+import { extractAigeiItemPage, isAigeiItemUrl } from './aigei'
 import { sniffPage } from './sniffer'
 
 type ProgressReporter = (progress: ParseProgress) => void
@@ -35,6 +37,17 @@ function uniqueWarnings(warnings: string[]): string[] {
   return [...new Set(warnings.filter(Boolean))]
 }
 
+function warningsAfterDedicatedParse(warnings: string[]): string[] {
+  return uniqueWarnings(
+    warnings.filter(
+      (warning) =>
+        !/页面源码中没有发现直链媒体/.test(warning) &&
+        !/已继续尝试深度嗅探/.test(warning) &&
+        !/^静态扫描失败：/.test(warning)
+    )
+  )
+}
+
 export async function parsePage(
   rawUrl: string,
   options: ParseOptions,
@@ -49,6 +62,61 @@ export async function parsePage(
   } catch (error) {
     if (!options.deep) throw error
     quickResult = fallbackResult(pageUrl, error)
+  }
+
+  if (isAigeiItemUrl(quickResult.finalUrl || pageUrl)) {
+    onProgress({
+      stage: 'browser',
+      message: '识别到爱给网条目页，正在读取登录状态与下载规格…',
+      percent: 48
+    })
+    try {
+      const aigei = await extractAigeiItemPage(quickResult.finalUrl || pageUrl, onProgress)
+      const hasOriginals = aigei.resources.some(
+        (resource) => resource.discoveryLabel === '爱给网原片 · 站点正常下载流程'
+      )
+      const resources =
+        aigei.resources.length > 0 ? aigei.resources : quickResult.resources
+      const quickWarnings = quickResult.warnings.filter((warning) => {
+        if (
+          /页面源码中没有发现直链媒体/.test(warning) ||
+          /已继续尝试深度嗅探/.test(warning) ||
+          /^静态扫描失败：/.test(warning)
+        ) {
+          return false
+        }
+        if (hasOriginals && /爱给网条目页只公开低清预览/.test(warning)) return false
+        return true
+      })
+      onProgress({
+        stage: 'done',
+        message: hasOriginals
+          ? `爱给网解析完成，共 ${resources.length} 项原片资源`
+          : '爱给网解析完成，当前仅提供低清预览',
+        percent: 100
+      })
+      return {
+        ...quickResult,
+        finalUrl: aigei.finalUrl || quickResult.finalUrl,
+        title: aigei.title || quickResult.title,
+        description: aigei.description ?? quickResult.description,
+        siteName: 'aigei.com',
+        favicon: aigei.favicon ?? quickResult.favicon,
+        mode: 'deep',
+        resources,
+        stats: statsForResources(resources),
+        warnings: uniqueWarnings([...quickWarnings, ...aigei.warnings]),
+        elapsedMs: Date.now() - startedAt
+      }
+    } catch (error) {
+      const warning = `爱给网专用解析失败：${
+        error instanceof Error ? error.message : '未知错误'
+      }`
+      quickResult = {
+        ...quickResult,
+        warnings: uniqueWarnings([...quickResult.warnings, warning])
+      }
+    }
   }
 
   if (isBilibiliVideoUrl(quickResult.finalUrl || pageUrl)) {
@@ -75,11 +143,56 @@ export async function parsePage(
         mode: 'deep',
         resources,
         stats: statsForResources(resources),
-        warnings: uniqueWarnings([...quickResult.warnings, ...bilibili.warnings]),
+        warnings: warningsAfterDedicatedParse([...quickResult.warnings, ...bilibili.warnings]),
         elapsedMs: Date.now() - startedAt
       }
     } catch (error) {
       const warning = `Bilibili 专用解析失败：${
+        error instanceof Error ? error.message : '未知错误'
+      }`
+      if (!options.deep) {
+        return {
+          ...quickResult,
+          warnings: uniqueWarnings([...quickResult.warnings, warning]),
+          elapsedMs: Date.now() - startedAt
+        }
+      }
+      quickResult = {
+        ...quickResult,
+        warnings: uniqueWarnings([...quickResult.warnings, warning])
+      }
+    }
+  }
+
+  if (isDouyinVideoUrl(quickResult.finalUrl || pageUrl)) {
+    onProgress({
+      stage: 'browser',
+      message: '识别到抖音，正在捕获视频流与音轨…',
+      percent: 48
+    })
+    try {
+      const douyin = await extractDouyinPage(quickResult.finalUrl || pageUrl, onProgress)
+      const resources = douyin.resources
+      onProgress({
+        stage: 'done',
+        message: `抖音解析完成，共 ${resources.length} 个视频`,
+        percent: 100
+      })
+      return {
+        ...quickResult,
+        finalUrl: douyin.finalUrl || quickResult.finalUrl,
+        title: douyin.title || quickResult.title,
+        description: douyin.description ?? quickResult.description,
+        siteName: 'douyin.com',
+        favicon: douyin.favicon ?? quickResult.favicon,
+        mode: 'deep',
+        resources,
+        stats: statsForResources(resources),
+        warnings: warningsAfterDedicatedParse([...quickResult.warnings, ...douyin.warnings]),
+        elapsedMs: Date.now() - startedAt
+      }
+    } catch (error) {
+      const warning = `抖音专用解析失败：${
         error instanceof Error ? error.message : '未知错误'
       }`
       if (!options.deep) {

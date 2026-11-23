@@ -1,4 +1,6 @@
 import { net, protocol, session } from 'electron'
+import { getAigeiCookieHeader } from './aigei'
+import { getDouyinCookieHeader } from './douyin'
 
 export const MEDIA_SCHEME = 'framekit-media'
 
@@ -61,6 +63,26 @@ export function isBilibiliMediaUrl(rawUrl: string): boolean {
   }
 }
 
+function isDouyinHostUrl(rawUrl: string): boolean {
+  try {
+    return hostMatches(new URL(rawUrl).hostname.toLowerCase(), [
+      'douyin.com',
+      'douyinvod.com',
+      'douyinpic.com'
+    ])
+  } catch {
+    return false
+  }
+}
+
+function isAigeiHostUrl(rawUrl: string): boolean {
+  try {
+    return hostMatches(new URL(rawUrl).hostname.toLowerCase(), ['aigei.com'])
+  } catch {
+    return false
+  }
+}
+
 export function registerMediaScheme(): void {
   protocol.registerSchemesAsPrivileged([
     {
@@ -100,6 +122,10 @@ export function installMediaProtocol(): void {
 
     const bilibili =
       isBilibiliMediaUrl(target) || (Boolean(referer) && isBilibiliHostUrl(referer as string))
+    const douyin =
+      isDouyinHostUrl(target) || (Boolean(referer) && isDouyinHostUrl(referer as string))
+    const aigei =
+      isAigeiHostUrl(target) || (Boolean(referer) && isAigeiHostUrl(referer as string))
     const headers = new Headers({
       'user-agent': USER_AGENT,
       accept: '*/*',
@@ -108,6 +134,14 @@ export function installMediaProtocol(): void {
     if (bilibili) {
       headers.set('referer', 'https://www.bilibili.com/')
       const cookie = await bilibiliCookieHeader()
+      if (cookie) headers.set('cookie', cookie)
+    } else if (douyin) {
+      headers.set('referer', 'https://www.douyin.com/')
+      const cookie = await getDouyinCookieHeader()
+      if (cookie) headers.set('cookie', cookie)
+    } else if (aigei) {
+      headers.set('referer', referer || 'https://www.aigei.com/')
+      const cookie = await getAigeiCookieHeader()
       if (cookie) headers.set('cookie', cookie)
     } else if (referer) {
       headers.set('referer', referer)

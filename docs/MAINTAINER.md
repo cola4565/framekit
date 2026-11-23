@@ -51,6 +51,8 @@ $env:FRAMEKIT_DEBUG_PORT='9222'; npm run dev
 | `npm run test:bilibili` | 真实 Bilibili 解析 + 下载 + ffmpeg 合并 + 轨道校验 | 网络、Electron、可能需登录 |
 | `npm run test:ui` | 真实界面解析 / 下载 / 角标 / 截图 | 需先启动 demo 与 dev |
 
+爱给网与抖音目前使用真实页面手动回归：爱给网至少检查“未登录只返回公开预览”与规格提示；抖音至少检查视频流、独立音频流和合并后的 MP4 轨道。
+
 UI 冒烟完整流程（三个终端）：
 
 ```powershell
@@ -88,6 +90,8 @@ npm run dist:win
 - `release/FrameKit-<version>-Windows-x64.exe`
 - `release/FrameKit-<version>-Windows-x64.exe.blockmap`
 - `release/win-unpacked/`（用于快速验证）
+
+`npm run dist:win` 会先执行构建清理，旧版本 exe、blockmap、DMG、`win-unpacked` 与旧 `out/` 不会混入本次产物。
 
 如果卡在 `connect ETIMEDOUT ...:443`，说明 electron-builder 在下载 `winCodeSign` / `nsis`，检查代理是否生效。
 
@@ -193,10 +197,15 @@ node github-release.mjs ───▶ Release v<version>
 ## 7. 数据与清理
 
 - 构建产物：`release/`、`out/`、`.tmp/`（均已 gitignore）
+- 构建清理：`node scripts/clean-build.mjs` 删除旧 `out/` 与 `release/`；已接入 `npm run build` / `npm run dist*`
 - 用户数据：`%APPDATA%\framekit`
   - `download-history.json`：可安全删除（会重建）
   - `Partitions/bilibili/`：删除后需重新登录 B 站
-- 只保留当前版本的本地安装包，旧版本 exe / blockmap 及时删除
+  - `Partitions/douyin/`：删除后需重新登录抖音
+  - `Partitions/aigei/`：删除后需重新登录爱给网
+- 运行时清理：启动后与退出前只删除 `Cache`、`Code Cache`、`GPUCache`、`Dawn*Cache`、`ShaderCache` 等已知 Electron 缓存目录；不会删除 Cookie、Local Storage（本地存储）、下载历史或用户素材
+- 卸载策略：`deleteAppDataOnUninstall: false`，默认保留用户数据；需要彻底清理时由用户手动删除用户数据目录
+- 只保留当前版本的本地安装包，旧版本 exe / blockmap 由构建清理自动删除
 
 ## 8. 版本策略
 

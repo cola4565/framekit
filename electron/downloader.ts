@@ -79,6 +79,11 @@ function decodeDispositionFilename(header: string | null): string | undefined {
   return plain?.[1] ?? plain?.[2]?.trim()
 }
 
+function isHashLikeFilename(filename: string): boolean {
+  const stem = filename.replace(/\.[a-z0-9]{1,8}$/i, '')
+  return /^[a-f0-9]{16,}$/i.test(stem)
+}
+
 function ensureExtension(
   filename: string,
   mime: string | undefined,
@@ -143,6 +148,24 @@ function isBilibiliPageUrl(rawUrl: string): boolean {
   }
 }
 
+function isDouyinPageUrl(rawUrl: string): boolean {
+  try {
+    const hostname = new URL(rawUrl).hostname.toLowerCase()
+    return hostname === 'douyin.com' || hostname.endsWith('.douyin.com')
+  } catch {
+    return false
+  }
+}
+
+function isAigeiPageUrl(rawUrl: string): boolean {
+  try {
+    const hostname = new URL(rawUrl).hostname.toLowerCase()
+    return hostname === 'aigei.com' || hostname.endsWith('.aigei.com')
+  } catch {
+    return false
+  }
+}
+
 function requestHeaders(
   target: string,
   pageUrl: string,
@@ -159,6 +182,12 @@ function requestHeaders(
     headers.referer = 'https://www.bilibili.com/'
     // Bilibili 的直链要求带 Range，否则统一返回 HTTP 567。
     headers.range = 'bytes=0-'
+    if (cookie) headers.cookie = cookie
+  } else if (isDouyinPageUrl(pageUrl)) {
+    headers.referer = 'https://www.douyin.com/'
+    if (cookie) headers.cookie = cookie
+  } else if (isAigeiPageUrl(pageUrl)) {
+    headers.referer = pageUrl || 'https://www.aigei.com/'
     if (cookie) headers.cookie = cookie
   } else if (pageUrl) {
     headers.referer = pageUrl
@@ -365,8 +394,12 @@ export class DownloadManager {
 
       const mime = response.headers.get('content-type')?.split(';')[0].trim().toLowerCase()
       const dispositionName = decodeDispositionFilename(response.headers.get('content-disposition'))
+      const preferredName =
+        dispositionName && !isHashLikeFilename(dispositionName)
+          ? dispositionName
+          : task.request.filename
       task.filename = ensureExtension(
-        dispositionName || task.request.filename,
+        preferredName,
         mime,
         task.request.kind
       )

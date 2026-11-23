@@ -4,7 +4,11 @@ const PROXY_HOST_SUFFIXES = [
   'bilibili.com',
   'bilivideo.com',
   'bilivideo.cn',
-  'hdslb.com'
+  'hdslb.com',
+  'douyin.com',
+  'douyinvod.com',
+  'douyinpic.com',
+  'aigei.com'
 ]
 
 function isBilibiliUrl(rawUrl: string): boolean {

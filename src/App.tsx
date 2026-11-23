@@ -104,6 +104,10 @@ export default function App(): React.JSX.Element {
   const [updateError, setUpdateError] = useState<string | null>(null)
   const [bilibiliLoggedIn, setBilibiliLoggedIn] = useState(false)
   const [bilibiliLoginBusy, setBilibiliLoginBusy] = useState(false)
+  const [aigeiLoggedIn, setAigeiLoggedIn] = useState(false)
+  const [aigeiLoginBusy, setAigeiLoginBusy] = useState(false)
+  const [douyinLoggedIn, setDouyinLoggedIn] = useState(false)
+  const [douyinLoginBusy, setDouyinLoginBusy] = useState(false)
   const toastTimer = useRef<number | null>(null)
   const toastId = useRef(0)
 
@@ -148,6 +152,28 @@ export default function App(): React.JSX.Element {
     }
   }, [url])
 
+  const isAigeiInput = useMemo(() => {
+    try {
+      const parsed = new URL(url.trim())
+      return parsed.hostname === 'aigei.com' || parsed.hostname.endsWith('.aigei.com')
+    } catch {
+      return false
+    }
+  }, [url])
+
+  const isDouyinInput = useMemo(() => {
+    try {
+      const parsed = new URL(url.trim())
+      return (
+        parsed.hostname === 'v.douyin.com' ||
+        parsed.hostname === 'douyin.com' ||
+        parsed.hostname.endsWith('.douyin.com')
+      )
+    } catch {
+      return false
+    }
+  }, [url])
+
   useEffect(() => {
     if (!isBilibiliInput) return
     let active = true
@@ -163,6 +189,38 @@ export default function App(): React.JSX.Element {
       active = false
     }
   }, [isBilibiliInput])
+
+  useEffect(() => {
+    if (!isAigeiInput) return
+    let active = true
+    void window.framekit
+      .getAigeiAuthStatus()
+      .then((loggedIn) => {
+        if (active) setAigeiLoggedIn(loggedIn)
+      })
+      .catch(() => {
+        if (active) setAigeiLoggedIn(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [isAigeiInput])
+
+  useEffect(() => {
+    if (!isDouyinInput) return
+    let active = true
+    void window.framekit
+      .getDouyinAuthStatus()
+      .then((loggedIn) => {
+        if (active) setDouyinLoggedIn(loggedIn)
+      })
+      .catch(() => {
+        if (active) setDouyinLoggedIn(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [isDouyinInput])
 
   useEffect(() => {
     try {
@@ -343,6 +401,42 @@ export default function App(): React.JSX.Element {
       setBilibiliLoginBusy(false)
     }
   }, [bilibiliLoginBusy, notify])
+
+  const handleAigeiLogin = useCallback(async (): Promise<void> => {
+    if (aigeiLoginBusy) return
+    setAigeiLoginBusy(true)
+    try {
+      const loggedIn = await window.framekit.loginAigei()
+      setAigeiLoggedIn(loggedIn)
+      notify(
+        loggedIn
+          ? '爱给网登录成功，重新解析可读取原片下载规格'
+          : '爱给网登录未完成',
+        loggedIn ? 'success' : 'info'
+      )
+    } catch (loginError) {
+      notify(errorMessage(loginError), 'error')
+    } finally {
+      setAigeiLoginBusy(false)
+    }
+  }, [aigeiLoginBusy, notify])
+
+  const handleDouyinLogin = useCallback(async (): Promise<void> => {
+    if (douyinLoginBusy) return
+    setDouyinLoginBusy(true)
+    try {
+      const loggedIn = await window.framekit.loginDouyin()
+      setDouyinLoggedIn(loggedIn)
+      notify(
+        loggedIn ? '抖音登录成功，重新解析可读取账号可访问的视频' : '抖音登录未完成',
+        loggedIn ? 'success' : 'info'
+      )
+    } catch (loginError) {
+      notify(errorMessage(loginError), 'error')
+    } finally {
+      setDouyinLoginBusy(false)
+    }
+  }, [douyinLoginBusy, notify])
 
   const toggleResource = (id: string): void => {
     setSelected((current) => {
@@ -687,6 +781,50 @@ export default function App(): React.JSX.Element {
                       {bilibiliLoggedIn ? 'B站已登录' : '登录 B站'}
                     </button>
                   )}
+                  {isAigeiInput && (
+                    <button
+                      type="button"
+                      className={`bilibili-login-button${aigeiLoggedIn ? ' is-logged-in' : ''}`}
+                      onClick={() => void handleAigeiLogin()}
+                      disabled={aigeiLoginBusy}
+                      title={
+                        aigeiLoggedIn
+                          ? '爱给网已登录；重新解析可读取原片下载规格'
+                          : '登录爱给网，按站点正常入口读取原片'
+                      }
+                    >
+                      {aigeiLoginBusy ? (
+                        <Loader2 size={15} className="spin" />
+                      ) : aigeiLoggedIn ? (
+                        <Check size={15} />
+                      ) : (
+                        <LogIn size={15} />
+                      )}
+                      {aigeiLoggedIn ? '爱给网已登录' : '登录爱给网'}
+                    </button>
+                  )}
+                  {isDouyinInput && (
+                    <button
+                      type="button"
+                      className={`bilibili-login-button${douyinLoggedIn ? ' is-logged-in' : ''}`}
+                      onClick={() => void handleDouyinLogin()}
+                      disabled={douyinLoginBusy}
+                      title={
+                        douyinLoggedIn
+                          ? '抖音已登录；重新解析可读取账号可访问的视频'
+                          : '登录抖音，处理需要登录或验证码的视频'
+                      }
+                    >
+                      {douyinLoginBusy ? (
+                        <Loader2 size={15} className="spin" />
+                      ) : douyinLoggedIn ? (
+                        <Check size={15} />
+                      ) : (
+                        <LogIn size={15} />
+                      )}
+                      {douyinLoggedIn ? '抖音已登录' : '登录抖音'}
+                    </button>
+                  )}
 
                 </div>
 
@@ -694,9 +832,13 @@ export default function App(): React.JSX.Element {
                   <span className="mode-hint">
                     {isBilibiliInput
                       ? 'Bilibili 会读取独立音轨并按账号权限列出清晰度'
-                      : deep
-                        ? '会启动内置浏览器，通常需要 5–15 秒'
-                        : '速度最快，适合静态图和直链资源'}
+                      : isAigeiInput
+                        ? '爱给网登录后可读取原片；未登录只显示低清预览'
+                        : isDouyinInput
+                          ? '抖音会捕获独立音视频流；需要时可在应用内登录'
+                        : deep
+                          ? '会启动内置浏览器，通常需要 5–15 秒'
+                          : '速度最快，适合静态图和直链资源'}
                   </span>
                   <button
                     type="submit"

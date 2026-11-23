@@ -23,6 +23,10 @@ const api: FramekitApi = {
   checkForUpdates: (): Promise<UpdateCheckResult> => ipcRenderer.invoke('updates:check'),
   getBilibiliAuthStatus: (): Promise<boolean> => ipcRenderer.invoke('bilibili:auth-status'),
   loginBilibili: (): Promise<boolean> => ipcRenderer.invoke('bilibili:login'),
+  getAigeiAuthStatus: (): Promise<boolean> => ipcRenderer.invoke('aigei:auth-status'),
+  loginAigei: (): Promise<boolean> => ipcRenderer.invoke('aigei:login'),
+  getDouyinAuthStatus: (): Promise<boolean> => ipcRenderer.invoke('douyin:auth-status'),
+  loginDouyin: (): Promise<boolean> => ipcRenderer.invoke('douyin:login'),
   parsePage: (url: string, options: ParseOptions): Promise<ParseResult> =>
     ipcRenderer.invoke('parse:page', url, options),
   onParseProgress: (callback: (progress: ParseProgress) => void) => {

@@ -133,6 +133,10 @@ export interface FramekitApi {
   checkForUpdates: () => Promise<UpdateCheckResult>
   getBilibiliAuthStatus: () => Promise<boolean>
   loginBilibili: () => Promise<boolean>
+  getAigeiAuthStatus: () => Promise<boolean>
+  loginAigei: () => Promise<boolean>
+  getDouyinAuthStatus: () => Promise<boolean>
+  loginDouyin: () => Promise<boolean>
   parsePage: (url: string, options: ParseOptions) => Promise<ParseResult>
   onParseProgress: (callback: (progress: ParseProgress) => void) => () => void
   chooseDirectory: () => Promise<string | null>

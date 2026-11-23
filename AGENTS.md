@@ -1,15 +1,17 @@
 # FrameKit 项目基线
 
-面向视频剪辑 / 后期工作者的跨平台桌面工具箱。当前只有一个模块：**网页素材解析器**（图片、音频、视频、字幕、其他文件）。仓库：`cola4565/framekit`，当前版本 **1.1.2**，已发布 Windows NSIS 安装包与 macOS DMG（arm64 / x64）。
+面向视频剪辑 / 后期工作者的跨平台桌面工具箱。当前只有一个模块：**网页素材解析器**（图片、音频、视频、字幕、其他文件）。仓库：`cola4565/framekit`，当前版本 **1.2.0**，已发布 Windows NSIS 安装包与 macOS DMG（arm64 / x64）。
 
 ## 技术栈
 
 - Electron 45.3.3 + React 19 + TypeScript 5.9，构建用 electron-vite 6（Vite 8 / rolldown）
 - 打包 electron-builder 26，Windows 目标 NSIS x64，macOS 目标 DMG（x64 + arm64）
-- 解析：cheerio 1.2（静态 HTML）
-- 图标：lucide-react
+- 解析：cheerio 1.2（静态 HTML；由 electron-vite 打入主进程包）
+- 图标：lucide-react（由 Vite 打入渲染进程包）
 - 音视频合并：ffmpeg-static 5.3.0（打包时 `asarUnpack`，运行时替换为 `app.asar.unpacked` 路径）
 - 无数据库；下载历史写在 userData 的 JSON 文件里
+
+`react`、`react-dom`、`lucide-react`、`cheerio` 已移到 `devDependencies`，因为它们会在构建时被打包；`dependencies` 只保留运行时必须由 Electron 加载的 `ffmpeg-static`。
 
 ## 目录与职责
 
@@ -17,13 +19,16 @@
 electron/
   main.ts              主进程入口、IPC 注册、单实例锁、菜单
   preload.ts           contextBridge 暴露 window.framekit
-  parser.ts            解析编排：静态扫描 →（可选）深度嗅探 / Bilibili 专用
+  parser.ts            解析编排：静态扫描 → 爱给网 / Bilibili / 抖音专用解析 →（可选）深度嗅探
   extractor.ts         静态 HTML/CSS/JSON-LD/脚本资源提取、URL 规整、文件名清洗
   sniffer.ts           隐藏浏览器深度嗅探（执行脚本、滚动、监听网络）
   bilibili.ts          Bilibili 会话、登录、播放信息、清晰度与音轨匹配
+  douyin.ts            抖音持久会话、登录、DASH 流捕获与音视频配对
+  aigei.ts             爱给网持久会话、登录、下载规格读取与正常下载入口
   downloader.ts        下载队列：并发 3、Range/Referer/Cookie、DASH 合并、取消、删除
   download-history.ts  下载记录持久化（最多 200 条）
   media-protocol.ts    framekit-media:// 预览代理（补请求头、转发 Range）
+  cache-cleanup.ts     清理 Electron 缓存，保留 Cookie、登录态、下载历史与用户素材
   updater.ts           GitHub Releases 检查更新
 src/
   App.tsx              主界面状态：解析、筛选、选择、队列、更新
@@ -32,7 +37,7 @@ src/
   shared/media.ts      预览代理 URL 与“最低清晰度”选择
   shared/version.ts    semver 比较
   styles.css           全部样式（深色 UI，尺寸偏小，改样式先看变量区）
-scripts/               冒烟测试与演示服务器
+scripts/               冒烟测试、演示服务器、构建清理
 ```
 
 ## 关键实现约定
@@ -40,6 +45,10 @@ scripts/               冒烟测试与演示服务器
 - **Bilibili 是 DASH**：视频流与音频流分离，`.m4s` 不能直接当成品播放。解析时每个清晰度生成一条资源，携带 `audioUrl`；下载时分别拉流再用 ffmpeg `-c copy` 合并为 MP4。
 - **Bilibili 防盗链**：直链必须带 `Range: bytes=0-`、`Referer: https://www.bilibili.com/`，登录后还要带 Cookie；否则返回 HTTP 567。
 - **不能只按媒体域名判断 Bilibili**：清晰度可能分配到 `bilivideo.com`、`bilivideo.cn` 或 `akamaized.net`。统一按 `resource.pageUrl` 是否为 bilibili 页面来判断是否走专用请求头 / 预览代理。
+- **抖音是 DASH**：视频流与音频流分离，按 URL 的 `l` 参数配对；下载后由 ffmpeg 合并为标准 MP4。抖音登录使用 `persist:douyin`，检测 `sessionid` / `sessionid_ss` / `sid_tt`。
+- **爱给网搜索页与条目页不同**：搜索页只读取 `fast-video-url` 的 Base64 低清预览，并过滤掉站点 UI 图片；条目页通过 CDP（Chrome DevTools Protocol，浏览器调试协议）读取下载规格与登录状态。
+- **爱给网登录与下载**：`persist:aigei` 保存站点登录态；只调用页面正常的 `itemFileDown` 入口。未登录、验证码、VIP、铜币或商用授权限制都必须保留提示，不得绕过。
+- **webRequest 监听必须回调**：Electron 的 `webRequest.onBeforeRequest` 监听器必须调用 `callback({})`，否则会挂起页面请求。爱给网曾因漏掉回调导致下载按钮和预览全部读不到。
 - **预览代理**：`framekit-media://media/?url=...&referer=...`。新增 scheme 时记得同步 `index.html` 的 CSP（`img-src` / `media-src` 已包含 `framekit-media:`）。
 - **预览用最低清晰度，下载用所选清晰度**：`lowestQualityVariant()` 按 `groupId` 找同组资源，`PreviewModal` 的 `playbackResource` 与 `resource` 分离。
 - **下载队列**：记录持久化；删除记录会删磁盘文件；删除时先 `abort` 并等待运行中的 Promise 结束再删，避免“删完又被重命名写回”；打开队列每 5 秒校验文件是否存在。
@@ -67,8 +76,12 @@ UI 冒烟需要两个后台进程：`npm run demo`（127.0.0.1:8787）与 `FRAME
 - 用户数据目录：`%APPDATA%\framekit`（macOS 为 `~/Library/Application Support/framekit`）
   - `download-history.json`：下载队列历史
   - `Partitions/bilibili/`：Bilibili 登录 Cookie（`SESSDATA`）
+  - `Partitions/douyin/`：抖音登录 Cookie 与站点会话
+  - `Partitions/aigei/`：爱给网登录 Cookie 与站点会话
 - Windows 文件系统大小写不敏感，`framekit` 与 `FrameKit` 指向同一目录，不是两份数据。
-- 打包产物在 `release/`（已 gitignore），只保留当前版本；旧版本安装包应及时清理。
+- 打包产物在 `release/`（已 gitignore）。`node scripts/clean-build.mjs` 会在构建前删除旧 `out/` 与 `release/`，只生成当前版本产物。
+- 运行时缓存清理只删除已知 Electron 缓存目录；不得删除 Cookie、Local Storage（本地存储）、下载历史或用户素材。
+- 卸载默认保留用户数据（`deleteAppDataOnUninstall: false`），避免误删素材和登录态。
 
 ## 发版流程（简版）
 
@@ -106,6 +119,9 @@ UI 冒烟需要两个后台进程：`npm run demo`（127.0.0.1:8787）与 `FRAME
 | 删除队列项后文件又出现 | 与重命名/合并存在竞态 | 删除时 abort 并 await 运行中的 Promise，重命名后再检查 `removed` |
 | 队列里文件已删但状态还是完成 | 只信任内存状态 | 打开队列时校验 `filePath`，缺失则标记“文件已在磁盘上删除” |
 | 重启后队列清空 | 记录只在内存 | 持久化到 `download-history.json` |
+| 爱给网页面没有下载按钮/预览 | `onBeforeRequest` 监听器未调用 `callback({})`，请求被挂起 | 监听器内先记录再回调；页面加载后留出反爬跳转时间 |
+| 爱给网搜索结果混入大量图片 | 样式表在视频过滤后又补回图片 | 视频搜索页跳过样式表扫描，并在合并后再次过滤 |
+| 爱给网动态读取被 iframe 导航打断 | 同源空白 iframe 频繁创建 | 使用 CDP `Runtime.evaluate`，不要依赖短生命周期 `executeJavaScript` |
 | `npm run test:*` 报 `spawn EPERM` | 沙箱禁止 esbuild 子进程 | 在沙箱外运行或提权 |
 
 ## 边界与后续方向
@@ -113,6 +129,7 @@ UI 冒烟需要两个后台进程：`npm run demo`（127.0.0.1:8787）与 `FRAME
 - 不做 DRM 解密、不绕过付费墙；仅用于下载用户有权保存的内容。
 - HLS（`.m3u8`）目前只识别清单，分片下载与合并未实现。
 - YouTube 等站点没有专用适配器。
+- 爱给网官方 API 使用独立 API Key、额度与授权范围，不等于网页全部资源；详见 `docs/PLATFORM-NOTES.md`。
 - 安装包未做商业代码签名/公证，SmartScreen / Gatekeeper 会提示未知开发者。
 - 可选后续：断点续传、HLS 合并、更多站点适配、下载队列暂停/重试、签名与自动更新。
 
