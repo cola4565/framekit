@@ -4,7 +4,7 @@
 
 ## 技术栈
 
-- Electron 45.3.3 + React 19 + TypeScript 5.9，构建用 electron-vite 6（Vite 8 / rolldown）
+- Electron 45.4.1 + React 19 + TypeScript 5.9，构建用 electron-vite 6（Vite 8 / rolldown）
 - 打包 electron-builder 26，Windows 目标 NSIS x64，macOS 目标 DMG（x64 + arm64）
 - 自动更新 electron-updater 6.8（GitHub provider，读取 Release 的 `latest.yml`）
 - 解析：cheerio 1.2（静态 HTML；由 electron-vite 打入主进程包）
