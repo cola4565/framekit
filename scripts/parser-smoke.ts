@@ -123,6 +123,13 @@ async function main(): Promise<void> {
       `${origin}/video/poster.jpg`
     )
 
+    const ogVideo = result.resources.find((resource) => resource.filename === 'og.mp4')
+    assert.equal(
+      ogVideo?.poster,
+      `${origin}/og/cover.jpg`,
+      '没有自带封面的视频应回退到页面封面'
+    )
+
     const direct = await parseStaticPage(`${origin}/direct.mp4`)
     assert.equal(direct.resources.length, 1)
     assert.equal(direct.resources[0].kind, 'video')

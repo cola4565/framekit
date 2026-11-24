@@ -11,6 +11,8 @@ const PROXY_HOST_SUFFIXES = [
   'aigei.com'
 ]
 
+const THUMBNAIL_SCHEME = 'framekit-thumb'
+
 function isBilibiliUrl(rawUrl: string): boolean {
   try {
     const hostname = new URL(rawUrl).hostname.toLowerCase()
@@ -39,6 +41,14 @@ export function toPreviewUrl(rawUrl: string, referer?: string): string {
   const safeReferer = referer && /^https?:\/\//i.test(referer) ? referer : ''
   if (safeReferer) params.set('referer', safeReferer)
   return `framekit-media://media/?${params.toString()}`
+}
+
+export function toThumbnailUrl(rawUrl: string, referer?: string): string {
+  if (!/^https?:\/\//i.test(rawUrl)) return rawUrl
+  const params = new URLSearchParams({ url: rawUrl })
+  const safeReferer = referer && /^https?:\/\//i.test(referer) ? referer : ''
+  if (safeReferer) params.set('referer', safeReferer)
+  return `${THUMBNAIL_SCHEME}://thumb/?${params.toString()}`
 }
 
 export function lowestQualityVariant(

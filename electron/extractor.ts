@@ -465,6 +465,37 @@ function sortResources(resources: MediaResource[]): MediaResource[] {
   })
 }
 
+const POSTER_DISCOVERY_LABELS = [
+  'Open Graph 图片',
+  'Twitter 图片',
+  '结构化缩略图',
+  '结构化图片',
+  '视频封面',
+  '动态视频封面'
+]
+
+export function applyFallbackPoster(resources: MediaResource[]): MediaResource[] {
+  const videos = resources.filter((resource) => resource.kind === 'video' && !resource.poster)
+  if (videos.length === 0) return resources
+
+  const fallback = resources.find(
+    (resource) =>
+      resource.kind === 'image' &&
+      POSTER_DISCOVERY_LABELS.includes(resource.discoveryLabel) &&
+      !videos.some((video) => video.url === resource.url)
+  )
+  if (!fallback) return resources
+
+  const posterMap = new Map<string, string>()
+  for (const video of videos) {
+    posterMap.set(video.id, fallback.url)
+  }
+
+  return resources.map((resource) =>
+    posterMap.has(resource.id) ? { ...resource, poster: fallback.url } : resource
+  )
+}
+
 export function statsForResources(resources: MediaResource[]): ParseStats {
   const stats: ParseStats = {
     images: 0,
@@ -1130,6 +1161,8 @@ function extractHtmlResources(
     )
     resources = poster ? [...previews, poster] : previews
   }
+
+  resources = applyFallbackPoster(resources)
 
   if (resources.length === 0) {
     warnings.push('页面源码中没有发现直链媒体。可以尝试“深度嗅探”，它会执行页面脚本并监听网络请求。')

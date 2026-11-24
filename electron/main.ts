@@ -35,6 +35,10 @@ import { installMediaProtocol, registerMediaScheme } from './media-protocol'
 import { parsePage } from './parser'
 import { migrateLegacyStorage, prepareStorage } from './storage'
 import {
+  installThumbnailProtocol,
+  registerThumbnailScheme
+} from './thumbnail'
+import {
   canAutoUpdate,
   checkForUpdates,
   downloadUpdate,
@@ -51,6 +55,7 @@ let closePromptReady = false
 
 prepareStorage()
 registerMediaScheme()
+registerThumbnailScheme()
 
 if (process.env.FRAMEKIT_DEBUG_PORT) {
   app.commandLine.appendSwitch('remote-debugging-port', process.env.FRAMEKIT_DEBUG_PORT)
@@ -456,6 +461,7 @@ if (!hasLock) {
       callback(false)
     })
     installMediaProtocol()
+    await installThumbnailProtocol()
     await downloadHistory.load()
     buildMenu()
     registerIpc()

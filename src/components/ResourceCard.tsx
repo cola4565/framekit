@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Check,
   Copy,
   Download,
   FileText,
   Image as ImageIcon,
+  Loader2,
   Music,
   Play
 } from 'lucide-react'
@@ -16,7 +17,7 @@ import {
   kindMeta,
   sourceMeta
 } from '../shared/format'
-import { toPreviewUrl } from '../shared/media'
+import { toPreviewUrl, toThumbnailUrl } from '../shared/media'
 
 interface ResourceCardProps {
   resource: MediaResource
@@ -44,13 +45,28 @@ export default function ResourceCard({
   onCopy
 }: ResourceCardProps): React.JSX.Element {
   const [imageFailed, setImageFailed] = useState(false)
+  const [coverLoading, setCoverLoading] = useState(false)
   const isImage = resource.kind === 'image'
   const isVideo = resource.kind === 'video'
   const isAudio = resource.kind === 'audio'
-  const posterSource = isImage ? resource.url : isVideo ? resource.poster : undefined
+  const posterSource = isImage
+    ? resource.url
+    : isVideo
+      ? resource.poster
+      : undefined
   const posterUrl = posterSource
     ? toPreviewUrl(posterSource, resource.pageUrl)
     : undefined
+  const coverUrl =
+    isVideo && !resource.poster && !resource.isStream
+      ? toThumbnailUrl(resource.url, resource.pageUrl)
+      : undefined
+  const showCover = Boolean((posterUrl || coverUrl) && !imageFailed)
+
+  useEffect(() => {
+    setImageFailed(false)
+    setCoverLoading(Boolean(coverUrl))
+  }, [coverUrl, posterUrl])
   const width = resource.width && resource.height ? `${resource.width} × ${resource.height}` : ''
 
   return (
@@ -74,14 +90,23 @@ export default function ResourceCard({
         onClick={() => onPreview(resource)}
         aria-label={`预览 ${resource.label || resource.filename}`}
       >
-        {posterUrl && !imageFailed ? (
+        {showCover ? (
           <img
-            src={posterUrl}
+            src={posterUrl ?? coverUrl}
             alt=""
             loading="lazy"
             referrerPolicy="no-referrer"
-            onError={() => setImageFailed(true)}
+            onLoad={() => setCoverLoading(false)}
+            onError={() => {
+              setImageFailed(true)
+              setCoverLoading(false)
+            }}
           />
+        ) : coverLoading ? (
+          <div className="file-visual is-loading" aria-hidden="true">
+            <Loader2 size={30} strokeWidth={1.4} className="spin" />
+            <span>生成封面</span>
+          </div>
         ) : isAudio ? (
           <div className="audio-visual" aria-hidden="true">
             <Music size={32} strokeWidth={1.4} />

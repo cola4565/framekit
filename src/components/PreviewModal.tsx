@@ -8,7 +8,7 @@ import {
 } from 'lucide-react'
 import type { MediaResource } from '../shared/types'
 import { formatBytes, formatDuration, kindMeta, sourceMeta } from '../shared/format'
-import { toPreviewUrl } from '../shared/media'
+import { toPreviewUrl, toThumbnailUrl } from '../shared/media'
 
 interface PreviewModalProps {
   resource: MediaResource
@@ -44,6 +44,25 @@ export default function PreviewModal({
     () => (playback.poster ? toPreviewUrl(playback.poster, playback.pageUrl) : undefined),
     [playback.poster, playback.pageUrl]
   )
+  const coverSrc = useMemo(() => {
+    if (playback.poster) return posterSrc
+    if (resource.poster) return toPreviewUrl(resource.poster, resource.pageUrl)
+    if (resource.kind !== 'video' || resource.isStream) return undefined
+    return toThumbnailUrl(resource.url, resource.pageUrl)
+  }, [
+    playback.poster,
+    posterSrc,
+    resource.isStream,
+    resource.kind,
+    resource.pageUrl,
+    resource.poster,
+    resource.url
+  ])
+  const [coverFailed, setCoverFailed] = useState(false)
+
+  useEffect(() => {
+    setCoverFailed(false)
+  }, [coverSrc])
 
   useEffect(() => {
     setMediaError(false)
@@ -154,6 +173,7 @@ export default function PreviewModal({
               controls
               autoPlay
               playsInline
+              hidden={mediaError}
               onError={() => setMediaError(true)}
             />
           )}
@@ -161,10 +181,24 @@ export default function PreviewModal({
             <audio ref={audioRef} src={audioSrc} preload="auto" hidden />
           )}
           {resource.kind === 'video' && !resource.isStream && mediaError && (
-            <div className="preview-fallback">
-              <FileText size={48} strokeWidth={1.2} />
+            <div className="preview-fallback preview-fallback-cover">
+              {coverSrc && !coverFailed ? (
+                <img
+                  className="preview-cover"
+                  src={coverSrc}
+                  alt="视频封面"
+                  referrerPolicy="no-referrer"
+                  onError={() => setCoverFailed(true)}
+                />
+              ) : (
+                <FileText size={48} strokeWidth={1.2} />
+              )}
               <h3>当前直链无法直接播放</h3>
-              <p>该链接可能已过期或存在防盗链限制。可以先下载，合并后会生成可播放的 MP4。</p>
+              <p>
+                {coverSrc && !coverFailed
+                  ? '这是从视频中抓取的首帧画面。链接可能已过期或存在防盗链限制，可以先下载，合并后会生成可播放的 MP4。'
+                  : '该链接可能已过期或存在防盗链限制。可以先下载，合并后会生成可播放的 MP4。'}
+              </p>
             </div>
           )}
           {resource.kind === 'audio' && !resource.isStream && (

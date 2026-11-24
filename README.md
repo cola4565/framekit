@@ -4,7 +4,7 @@
 
 支持 Windows 与 macOS，基于 Electron + React + TypeScript 构建，解析与下载全部在本机完成。
 
-当前正式版：**v1.3.2**
+当前正式版：**v1.3.3**
 
 ![FrameKit 素材解析界面](docs/screenshot-results.png)
 
@@ -12,9 +12,9 @@
 
 ## 下载
 
-- [FrameKit 1.3.2 · Windows x64 安装包](https://github.com/cola4565/framekit/releases/download/v1.3.2/FrameKit-1.3.2-Windows-x64.exe)
-- [FrameKit 1.3.2 · macOS Apple Silicon](https://github.com/cola4565/framekit/releases/download/v1.3.2/FrameKit-1.3.2-macOS-arm64.dmg)
-- [FrameKit 1.3.2 · macOS Intel](https://github.com/cola4565/framekit/releases/download/v1.3.2/FrameKit-1.3.2-macOS-x64.dmg)
+- [FrameKit 1.3.3 · Windows x64 安装包](https://github.com/cola4565/framekit/releases/download/v1.3.3/FrameKit-1.3.3-Windows-x64.exe)
+- [FrameKit 1.3.3 · macOS Apple Silicon](https://github.com/cola4565/framekit/releases/download/v1.3.3/FrameKit-1.3.3-macOS-arm64.dmg)
+- [FrameKit 1.3.3 · macOS Intel](https://github.com/cola4565/framekit/releases/download/v1.3.3/FrameKit-1.3.3-macOS-x64.dmg)
 - [全部版本与更新说明](https://github.com/cola4565/framekit/releases)
 
 Windows 首次安装可以选择安装盘和目录，默认装到 `%LOCALAPPDATA%\Programs\framekit`，也支持 `D:\FrameKit` 等位置；之后可直接在应用内静默更新。从 1.2.0 及更早版本升级需要手动安装一次。macOS 安装包暂未配置 Apple 开发者签名与公证，首次运行时系统可能提示未知开发者；macOS 的应用内静默安装也要等签名配置完成后启用。
@@ -27,6 +27,7 @@ Windows 卸载时会删除下载记录、登录态、设置和所有缓存，只
 - **深度嗅探**：启动隐藏的内置浏览器执行页面脚本、滚动触发懒加载，并监听真实网络请求，捕获动态插入的图片、音视频、HLS/DASH 清单和脚本请求资源。
 - **统一资源库**：按图片、视频、音频、其他分类；支持搜索、筛选、尺寸/时长/体积/MIME 展示。
 - **内置预览**：图片、视频、音频和流媒体清单说明；支持复制直链和浏览器打开。Bilibili 多清晰度资源预览时自动使用最低清晰度，下载仍按你选择的清晰度执行。
+- **视频封面**：页面没有封面图时，自动从视频首帧抽取封面显示在资源卡片和预览弹窗里；直链无法直接播放时也能先看到画面再决定要不要下载，不用下载完才发现内容不对。
 - **批量下载**：多选、队列并发、实时速度与进度、取消、文件名去重、Content-Disposition 文件名、`.part` 临时文件。
 - **下载队列管理**：记录本地持久化，可逐条删除（同时删除磁盘文件）、清空列表、定位文件；磁盘文件被外部删除后会在队列中标记“文件已在磁盘上删除”。
 - **Bilibili 专用解析**：读取账号可用的清晰度列表（含大会员 4K/1080P+ 等），分别下载独立视频流与音频流，并用内置 ffmpeg 自动合并为标准 MP4。
@@ -84,7 +85,7 @@ Windows 卸载时会删除下载记录、登录态、设置和所有缓存，只
 | 类型 | 支持情况 |
 | --- | --- |
 | 常规图片 | 支持 `<img>`、`srcset`、懒加载属性、CSS 背景、OG/Twitter、JSON-LD、脚本内 URL |
-| 常规音视频 | 支持 `<video>`、`<audio>`、`<source>`、直链、网络请求捕获 |
+| 常规音视频 | 支持 `<video>`、`<audio>`、`<source>`、直链、网络请求捕获；没有封面时自动抽取视频首帧作为封面 |
 | HLS / DASH | 能识别 `.m3u8` / `.mpd` 清单；Bilibili DASH 已支持下载后自动合并音视频，其他站点的分片合并尚未支持 |
 | 防盗链资源 | Bilibili 直链已处理 Referer / Range / Cookie；其他站点仍可能拒绝 |
 | 登录后资源 | 深度嗅探使用独立会话，不继承浏览器登录状态 |

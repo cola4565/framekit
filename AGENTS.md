@@ -1,6 +1,6 @@
 # FrameKit 项目基线
 
-面向视频剪辑 / 后期工作者的跨平台桌面工具箱。当前只有一个模块：**网页素材解析器**（图片、音频、视频、字幕、其他文件）。仓库：`cola4565/framekit`，当前版本 **1.3.2**，已发布 Windows NSIS 安装包与 macOS DMG（arm64 / x64）。
+面向视频剪辑 / 后期工作者的跨平台桌面工具箱。当前只有一个模块：**网页素材解析器**（图片、音频、视频、字幕、其他文件）。仓库：`cola4565/framekit`，当前版本 **1.3.3**，已发布 Windows NSIS 安装包与 macOS DMG（arm64 / x64）。
 
 ## 技术栈
 
@@ -29,6 +29,7 @@ electron/
   downloader.ts        下载队列：并发 3、Range/Referer/Cookie、DASH 合并、取消、删除
   download-history.ts  下载记录持久化（最多 200 条）
   media-protocol.ts    framekit-media:// 预览代理（补请求头、转发 Range）
+  thumbnail.ts        framekit-thumb:// 视频封面抽帧（ffmpeg 首帧 + 浏览器回退）
   storage.ts           数据根目录选择、旧数据迁移、非 C 盘路径配置
   cache-cleanup.ts     清理 Electron 缓存，保留 Cookie、登录态、下载历史与用户素材
   updater.ts           GitHub Releases 检查更新 + 更新包下载/静默安装
@@ -52,6 +53,8 @@ scripts/               冒烟测试、演示服务器、构建清理
 - **爱给网登录与下载**：`persist:aigei` 保存站点登录态；只调用页面正常的 `itemFileDown` 入口。未登录、验证码、VIP、铜币或商用授权限制都必须保留提示，不得绕过。
 - **webRequest 监听必须回调**：Electron 的 `webRequest.onBeforeRequest` 监听器必须调用 `callback({})`，否则会挂起页面请求。爱给网曾因漏掉回调导致下载按钮和预览全部读不到。
 - **预览代理**：`framekit-media://media/?url=...&referer=...`。新增 scheme 时记得同步 `index.html` 的 CSP（`img-src` / `media-src` 已包含 `framekit-media:`）。
+- **视频封面**：解析阶段先从 `<video poster>` / Open Graph / 结构化缩略图回填；仍无封面时由 `electron/thumbnail.ts` 用内置 ffmpeg 抽首帧（`scale=480:-2 -q:v 4 -f mjpeg`），ffmpeg 失败回退到隐藏 BrowserWindow `capturePage()`。走自定义 scheme `framekit-thumb://thumb/?url=...&referer=...`，`index.html` 的 CSP `img-src` 需包含 `framekit-thumb:`。封面缓存在 `userData/thumbnails/<sha1>.jpg`，上限 200 个，按 mtime 淘汰。
+- **封面请求头要跟站点走**：抽帧请求头与 `electron/downloader.ts` 的 `requestHeaders` 保持一致（Bilibili 需要 `Range: bytes=0-` + Referer + Cookie，抖音 / 爱给网按页面来源带 Referer 与 Cookie）。微博等 CDN 直链返回 403 时，必须使用完整签名 URL（含 `ssig` / `Expires` / `label` / `media_id` 等参数），简化 URL 必然失败。
 - **预览用最低清晰度，下载用所选清晰度**：`lowestQualityVariant()` 按 `groupId` 找同组资源，`PreviewModal` 的 `playbackResource` 与 `resource` 分离。
 - **下载队列**：记录持久化；删除记录会删磁盘文件；删除时先 `abort` 并等待运行中的 Promise 结束再删，避免“删完又被重命名写回”；打开队列每 5 秒校验文件是否存在。
 - **关闭与托盘**：关闭按钮统一走 `window:close-request` → 渲染层确认弹窗 → `window:close-action`；托盘常驻，Windows 最小化隐藏到系统托盘，macOS 使用菜单栏模板图标且原生黄色最小化保留 Dock 行为。
@@ -134,6 +137,8 @@ UI 冒烟需要两个后台进程：`npm run demo`（127.0.0.1:8787）与 `FRAME
 | 无法选择安装盘 | one-click 安装器固定装到 `%LOCALAPPDATA%\Programs` | `oneClick: false` + `allowToChangeInstallationDirectory: true`，并强制当前用户安装 |
 | 自动更新报缺少 `latest.yml` | 发布脚本只上传了 exe 与 blockmap | 发布资产必须包含 `latest.yml` |
 | 开发模式点更新报错 | `electron-updater` 需要打包后的 `app-update.yml` | 用 `release/win-unpacked/FrameKit.exe` 或安装版测试 |
+| 视频没有封面 / 预览只显示占位图 | 页面没有 `poster` / `og:image`，播放失败时也没有兜底画面 | 抽帧封面兜底：`electron/thumbnail.ts` 走 `framekit-thumb://`，播放失败时 `PreviewModal` 显示封面 |
+| 微博视频封面请求 403 | CDN 直链需要完整签名参数，简化 URL 无效 | 使用解析得到的完整签名 URL（`ssig` / `Expires` / `label` / `media_id`），并带正确 Referer |
 
 ## 边界与后续方向
 

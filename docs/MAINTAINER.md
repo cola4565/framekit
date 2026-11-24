@@ -114,6 +114,8 @@ $env:FRAMEKIT_DEBUG_PORT='9333'; npx tsx .tmp/bilibili-ui-e2e.ts   # 如该脚�
 
 最低要求：版本号正确、ffmpeg 可执行、Bilibili 1080P 下载后 `0:v:0` 与 `0:a:0` 都能解码。
 
+封面抽帧复用同一个内置 ffmpeg，所以上面第 2 步的 ffmpeg 校验同时覆盖了封面功能。抽帧本身不需要额外依赖，`electron/thumbnail.ts` 在主进程内直接调用 `ffmpeg-static`。
+
 ### 4.4 提交并推送
 
 ```powershell

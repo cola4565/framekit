@@ -5,6 +5,7 @@ import type {
   MediaResource
 } from '../src/shared/types'
 import {
+  applyFallbackPoster,
   mergeResources,
   parseStaticPage,
   statsForResources,
@@ -221,7 +222,9 @@ export async function parsePage(
 
   try {
     const sniffed = await sniffPage(quickResult.finalUrl, onProgress)
-    const resources: MediaResource[] = mergeResources(quickResult.resources, sniffed.resources)
+    const resources: MediaResource[] = applyFallbackPoster(
+      mergeResources(quickResult.resources, sniffed.resources)
+    )
     const quickTitleIsWeak =
       !quickResult.title ||
       quickResult.title === new URL(quickResult.finalUrl).hostname ||
