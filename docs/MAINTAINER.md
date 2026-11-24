@@ -211,13 +211,16 @@ node github-release.mjs ───▶ Release v<version>
 
 - 构建产物：`release/`、`out/`、`.tmp/`（均已 gitignore）
 - 构建清理：`node scripts/clean-build.mjs` 删除旧 `out/` 与 `release/`；已接入 `npm run build` / `npm run dist*`
-- 用户数据：`%APPDATA%\framekit`
-  - `download-history.json`：可安全删除（会重建）
-  - `Partitions/bilibili/`：删除后需重新登录 B 站
-  - `Partitions/douyin/`：删除后需重新登录抖音
-  - `Partitions/aigei/`：删除后需重新登录爱给网
+- Windows 用户数据根目录：安装盘下的 `FrameKitData`（例如 `D:\FrameKitData`）；若安装在 C 盘，会优先选第一个可写的非 C 盘。可用 `FRAMEKIT_DATA_DIR` 覆盖。
+  - `data/download-history.json`：可安全删除（会重建）
+  - `data/Partitions/bilibili/`：删除后需重新登录 B 站
+  - `data/Partitions/douyin/`：删除后需重新登录抖音
+  - `data/Partitions/aigei/`：删除后需重新登录爱给网
+  - `local/framekit-updater/`：更新包下载缓存
+  - `.framekit-data`：卸载器识别数据目录的标记文件
+- Windows 旧版 `%APPDATA%\framekit` 会在首次启动时迁移到新目录，然后删除；旧 `%LOCALAPPDATA%\framekit*` 缓存直接清理。macOS 保持 `~/Library/Application Support/FrameKit` 默认路径，不做重定向。
 - 运行时清理：启动后与退出前只删除 `Cache`、`Code Cache`、`GPUCache`、`Dawn*Cache`、`ShaderCache` 等已知 Electron 缓存目录；不会删除 Cookie、Local Storage（本地存储）、下载历史或用户素材
-- 卸载策略：`deleteAppDataOnUninstall: false`，默认保留用户数据；需要彻底清理时由用户手动删除用户数据目录
+- Windows 卸载策略：`deleteAppDataOnUninstall: true`；`assets/installer.nsh` 还会清理更新器缓存与所有带 `.framekit-data` 标记的 `FrameKitData` 目录。用户下载的素材文件不删除。macOS 无卸载器，删除 App 后需手动清理 `~/Library/Application Support`。
 - 只保留当前版本的本地安装包，旧版本 exe / blockmap 由构建清理自动删除
 
 ## 8. 版本策略

@@ -1,6 +1,6 @@
 # FrameKit 项目基线
 
-面向视频剪辑 / 后期工作者的跨平台桌面工具箱。当前只有一个模块：**网页素材解析器**（图片、音频、视频、字幕、其他文件）。仓库：`cola4565/framekit`，当前版本 **1.3.1**，已发布 Windows NSIS 安装包与 macOS DMG（arm64 / x64）。
+面向视频剪辑 / 后期工作者的跨平台桌面工具箱。当前只有一个模块：**网页素材解析器**（图片、音频、视频、字幕、其他文件）。仓库：`cola4565/framekit`，当前版本 **1.3.2**，已发布 Windows NSIS 安装包与 macOS DMG（arm64 / x64）。
 
 ## 技术栈
 
@@ -29,6 +29,7 @@ electron/
   downloader.ts        下载队列：并发 3、Range/Referer/Cookie、DASH 合并、取消、删除
   download-history.ts  下载记录持久化（最多 200 条）
   media-protocol.ts    framekit-media:// 预览代理（补请求头、转发 Range）
+  storage.ts           数据根目录选择、旧数据迁移、非 C 盘路径配置
   cache-cleanup.ts     清理 Electron 缓存，保留 Cookie、登录态、下载历史与用户素材
   updater.ts           GitHub Releases 检查更新 + 更新包下载/静默安装
 src/
@@ -77,15 +78,17 @@ UI 冒烟需要两个后台进程：`npm run demo`（127.0.0.1:8787）与 `FRAME
 
 ## 数据位置
 
-- 用户数据目录：`%APPDATA%\framekit`（macOS 为 `~/Library/Application Support/framekit`）
-  - `download-history.json`：下载队列历史
-  - `Partitions/bilibili/`：Bilibili 登录 Cookie（`SESSDATA`）
-  - `Partitions/douyin/`：抖音登录 Cookie 与站点会话
-  - `Partitions/aigei/`：爱给网登录 Cookie 与站点会话
+- Windows 打包版数据根目录：安装盘下的 `FrameKitData`，例如装在 `D:\FrameKit` 时使用 `D:\FrameKitData`；装在 C 盘时会优先选第一个可写的非 C 盘。`FRAMEKIT_DATA_DIR` 可覆盖。
+  - `data/`：Electron `userData` / `sessionData`，包含 `download-history.json`、`Partitions/bilibili|douyin|aigei/`、Local Storage、Preferences
+  - `cache/`、`logs/`、`crashDumps/`、`temp/`、`local/`、`roaming/`：Chromium 缓存、日志、崩溃转储、临时文件与进程级环境目录
+  - `local/framekit-updater/`：electron-updater 下载缓存
+  - `.framekit-data`：卸载器用来确认这是 FrameKit 数据目录的标记文件
+- 旧版 `%APPDATA%\framekit` 会在首次启动 1.3.2+ 时迁移到新数据根目录（跳过缓存），随后删除旧目录；`%LOCALAPPDATA%\framekit*` 旧缓存直接清理。
+- macOS 仍使用 Electron 默认的 `~/Library/Application Support/FrameKit`（macOS 文件系统通常大小写不敏感）。
 - Windows 文件系统大小写不敏感，`framekit` 与 `FrameKit` 指向同一目录，不是两份数据。
 - 打包产物在 `release/`（已 gitignore）。`node scripts/clean-build.mjs` 会在构建前删除旧 `out/` 与 `release/`，只生成当前版本产物。
 - 运行时缓存清理只删除已知 Electron 缓存目录；不得删除 Cookie、Local Storage（本地存储）、下载历史或用户素材。
-- 卸载默认保留用户数据（`deleteAppDataOnUninstall: false`），避免误删素材和登录态。
+- Windows 卸载彻底清理应用数据：`deleteAppDataOnUninstall: true`，并由 `assets/installer.nsh` 额外清理 `local/framekit-updater` 与所有带 `.framekit-data` 标记的 `FrameKitData` 目录；更新过程中的临时卸载用 `${isUpdated}` 跳过清理。用户实际下载的素材在下载目录中，不删除。macOS 是 DMG 拖拽安装，没有卸载器，删除 App 不会自动清数据，需手动删除 `~/Library/Application Support` 下对应目录。
 
 ## 发版流程（简版）
 

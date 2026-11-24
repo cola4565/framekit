@@ -33,6 +33,7 @@ import {
 } from './douyin'
 import { installMediaProtocol, registerMediaScheme } from './media-protocol'
 import { parsePage } from './parser'
+import { migrateLegacyStorage, prepareStorage } from './storage'
 import {
   canAutoUpdate,
   checkForUpdates,
@@ -48,6 +49,7 @@ let tray: Tray | null = null
 let trayNoticeShown = false
 let closePromptReady = false
 
+prepareStorage()
 registerMediaScheme()
 
 if (process.env.FRAMEKIT_DEBUG_PORT) {
@@ -440,6 +442,8 @@ const hasLock = app.requestSingleInstanceLock()
 if (!hasLock) {
   app.quit()
 } else {
+  migrateLegacyStorage()
+
   app.on('second-instance', () => {
     showMainWindow()
   })
