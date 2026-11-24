@@ -68,7 +68,7 @@ npm run test:ui
 ### 4.1 升版本
 
 ```powershell
-npm version 1.3.0 --no-git-tag-version
+npm version 1.3.1 --no-git-tag-version
 ```
 
 同步修改：
@@ -167,9 +167,12 @@ gh release view v<version> --repo cola4565/framekit --json assets --jq '.assets[
 
 最后在旧版本应用中点“检查更新”，确认能识别新版本与正确安装包。
 
-Windows 还要验证静默更新链路：点击“立即更新”后应在应用内显示下载进度，完成后出现“重启并安装”，且全程不弹出 NSIS 向导、不询问安装位置。
+Windows 还要验证两条链路：
 
-> 1.2.0 及更早版本没有内置 `electron-updater`，升级到 1.3.0 仍需手动安装一次；从 1.3.0 开始后续版本才能静默更新。macOS 应用内安装依赖 Apple 签名与公证，当前仍走 DMG 手动安装。
+1. 首次安装：运行 exe 应出现标准安装向导，能选择安装盘/目录；`assets/installer.nsh` 会强制当前用户安装，不需要管理员权限。
+2. 静默更新：点击“立即更新”后在应用内显示下载进度，完成后“重启并安装”应沿用首次安装目录，不弹 NSIS 向导、不重新询问位置。
+
+> 1.2.0 及更早版本没有内置 `electron-updater`，升级到 1.3.1 仍需手动安装一次；从 1.3.0 开始后续版本才能静默更新。macOS 应用内安装依赖 Apple 签名与公证，当前仍走 DMG 手动安装。
 
 ## 5. 发布链路说明
 
@@ -199,7 +202,8 @@ node github-release.mjs ───▶ Release v<version>
 | 打包后合并报“未找到内置 ffmpeg” | 确认 `asarUnpack` 与 `FFMPEG_PATH` 的 `app.asar.unpacked` 替换逻辑 |
 | 更新检查返回 403/429 | GitHub 限流；稍后重试，或确认未使用未授权的高频请求 |
 | 更新时报缺少 `latest.yml` | Release 未上传更新清单；重新执行 `npm run release:github` 或手动补传 |
-| 点“立即更新”又弹安装向导 | `nsis.oneClick` 被改回 false，或仍在运行旧版；确认安装的是 1.3.0+ |
+| 点“立即更新”又弹安装向导 | 更新器没有以 `/S` 启动安装包，或安装包缺少 `--updated` 逻辑；确认 `quitAndInstall(true, true)` 与 1.3.1+ |
+| 首次安装无法选盘 | `nsis.oneClick` 被改回 true，或 `allowToChangeInstallationDirectory` 被关闭 |
 | 开发模式下自动更新报错 | `electron-updater` 需要打包产物；用 `release/win-unpacked/FrameKit.exe` 测试 |
 | macOS 构建失败 | 查看 Actions 日志；`CSC_IDENTITY_AUTO_DISCOVERY=false` 已在 workflow 中设置 |
 

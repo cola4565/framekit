@@ -1,6 +1,6 @@
 # FrameKit 项目基线
 
-面向视频剪辑 / 后期工作者的跨平台桌面工具箱。当前只有一个模块：**网页素材解析器**（图片、音频、视频、字幕、其他文件）。仓库：`cola4565/framekit`，当前版本 **1.3.0**，已发布 Windows NSIS 安装包与 macOS DMG（arm64 / x64）。
+面向视频剪辑 / 后期工作者的跨平台桌面工具箱。当前只有一个模块：**网页素材解析器**（图片、音频、视频、字幕、其他文件）。仓库：`cola4565/framekit`，当前版本 **1.3.1**，已发布 Windows NSIS 安装包与 macOS DMG（arm64 / x64）。
 
 ## 技术栈
 
@@ -54,9 +54,9 @@ scripts/               冒烟测试、演示服务器、构建清理
 - **预览用最低清晰度，下载用所选清晰度**：`lowestQualityVariant()` 按 `groupId` 找同组资源，`PreviewModal` 的 `playbackResource` 与 `resource` 分离。
 - **下载队列**：记录持久化；删除记录会删磁盘文件；删除时先 `abort` 并等待运行中的 Promise 结束再删，避免“删完又被重命名写回”；打开队列每 5 秒校验文件是否存在。
 - **关闭与托盘**：关闭按钮统一走 `window:close-request` → 渲染层确认弹窗 → `window:close-action`；托盘常驻，Windows 最小化隐藏到系统托盘，macOS 使用菜单栏模板图标且原生黄色最小化保留 Dock 行为。
-- **静默更新**：检查版本仍走 GitHub REST API；下载与安装走 `electron-updater`。`autoDownload=false`，点击“立即更新”才下载；`quitAndInstall(true, true)` 静默安装并重启。NSIS 必须保持 `oneClick: true` + `perMachine: false`，否则会弹安装向导或每次更新请求管理员权限。`main.ts` 在调用安装前先置 `appQuitting=true`，避免关闭确认弹窗拦截。
+- **安装与更新**：Windows 使用 assisted NSIS（`oneClick: false` + `allowToChangeInstallationDirectory: true` + `perMachine: false`），首次安装可选安装盘/目录；`assets/installer.nsh` 的 `customInstallMode` 强制当前用户安装，避免每次更新请求管理员权限。更新走 `electron-updater`，`autoDownload=false`，点击“立即更新”才下载；`quitAndInstall(true, true)` 以 `--updated /S` 静默安装，NSIS 复用 HKCU 的 `InstallLocation`，不会重新询问目录。`main.ts` 在调用安装前先置 `appQuitting=true`，避免关闭确认弹窗拦截。
 - **更新清单**：每次 Release 必须同时上传 `latest.yml` 与 `.exe.blockmap`；`scripts/github-release.mjs` 已包含。缺少 `latest.yml` 时 `electron-updater` 会直接报错。
-- **首次迁移**：1.2.0 及更早版本没有 `electron-updater`，升级到 1.3.0 必须手动安装一次；1.3.0 起才能应用内静默更新。macOS 未签名/未公证，暂不启用静默安装（`canAutoUpdate` 只在 Windows 打包版为 true）。
+- **首次迁移**：1.2.0 及更早版本没有 `electron-updater`，升级到 1.3.1 必须手动安装一次；1.3.0 起才能应用内静默更新。macOS 未签名/未公证，暂不启用静默安装（`canAutoUpdate` 只在 Windows 打包版为 true）。
 - **安全模型**：`contextIsolation` + `sandbox`，关闭 `nodeIntegration`；渲染进程只能通过 preload 暴露的 API 操作文件与网络。
 
 ## 开发与测试
@@ -127,7 +127,8 @@ UI 冒烟需要两个后台进程：`npm run demo`（127.0.0.1:8787）与 `FRAME
 | 爱给网搜索结果混入大量图片 | 样式表在视频过滤后又补回图片 | 视频搜索页跳过样式表扫描，并在合并后再次过滤 |
 | 爱给网动态读取被 iframe 导航打断 | 同源空白 iframe 频繁创建 | 使用 CDP `Runtime.evaluate`，不要依赖短生命周期 `executeJavaScript` |
 | `npm run test:*` 报 `spawn EPERM` | 沙箱禁止 esbuild 子进程 | 在沙箱外运行或提权 |
-| 点更新后弹 NSIS 安装向导 | 旧实现只打开安装包，且 `oneClick: false` / 允许选目录 | 改为应用内 `electron-updater` + `oneClick: true` + `perMachine: false` |
+| 点更新后弹 NSIS 安装向导 | 旧实现只打开安装包；或安装包改成了 assisted 但未走 `--updated /S` | 应用内 `electron-updater` + `quitAndInstall(true, true)`；首次安装才显示向导 |
+| 无法选择安装盘 | one-click 安装器固定装到 `%LOCALAPPDATA%\Programs` | `oneClick: false` + `allowToChangeInstallationDirectory: true`，并强制当前用户安装 |
 | 自动更新报缺少 `latest.yml` | 发布脚本只上传了 exe 与 blockmap | 发布资产必须包含 `latest.yml` |
 | 开发模式点更新报错 | `electron-updater` 需要打包后的 `app-update.yml` | 用 `release/win-unpacked/FrameKit.exe` 或安装版测试 |
 

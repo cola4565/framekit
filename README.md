@@ -4,7 +4,7 @@
 
 支持 Windows 与 macOS，基于 Electron + React + TypeScript 构建，解析与下载全部在本机完成。
 
-当前正式版：**v1.3.0**
+当前正式版：**v1.3.1**
 
 ![FrameKit 素材解析界面](docs/screenshot-results.png)
 
@@ -12,12 +12,12 @@
 
 ## 下载
 
-- [FrameKit 1.3.0 · Windows x64 安装包](https://github.com/cola4565/framekit/releases/download/v1.3.0/FrameKit-1.3.0-Windows-x64.exe)
-- [FrameKit 1.3.0 · macOS Apple Silicon](https://github.com/cola4565/framekit/releases/download/v1.3.0/FrameKit-1.3.0-macOS-arm64.dmg)
-- [FrameKit 1.3.0 · macOS Intel](https://github.com/cola4565/framekit/releases/download/v1.3.0/FrameKit-1.3.0-macOS-x64.dmg)
+- [FrameKit 1.3.1 · Windows x64 安装包](https://github.com/cola4565/framekit/releases/download/v1.3.1/FrameKit-1.3.1-Windows-x64.exe)
+- [FrameKit 1.3.1 · macOS Apple Silicon](https://github.com/cola4565/framekit/releases/download/v1.3.1/FrameKit-1.3.1-macOS-arm64.dmg)
+- [FrameKit 1.3.1 · macOS Intel](https://github.com/cola4565/framekit/releases/download/v1.3.1/FrameKit-1.3.1-macOS-x64.dmg)
 - [全部版本与更新说明](https://github.com/cola4565/framekit/releases)
 
-Windows 安装包为当前用户安装，之后可直接在应用内静默更新。从 1.2.0 及更早版本升级到 1.3.0 需要手动安装一次。macOS 安装包暂未配置 Apple 开发者签名与公证，首次运行时系统可能提示未知开发者；macOS 的应用内静默安装也要等签名配置完成后启用。
+Windows 首次安装可以选择安装盘和目录，默认装到 `%LOCALAPPDATA%\Programs\framekit`，也支持 `D:\FrameKit` 等位置；之后可直接在应用内静默更新。从 1.2.0 及更早版本升级需要手动安装一次。macOS 安装包暂未配置 Apple 开发者签名与公证，首次运行时系统可能提示未知开发者；macOS 的应用内静默安装也要等签名配置完成后启用。
 
 ## 当前能力
 
