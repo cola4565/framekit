@@ -1,6 +1,6 @@
 # FrameKit 项目基线
 
-面向视频剪辑 / 后期工作者的跨平台桌面工具箱。当前只有一个模块：**网页素材解析器**（图片、音频、视频、字幕、其他文件）。仓库：`cola4565/framekit`，当前版本 **1.3.3**，已发布 Windows NSIS 安装包与 macOS DMG（arm64 / x64）。
+面向视频剪辑 / 后期工作者的跨平台桌面工具箱。当前只有一个模块：**网页素材解析器**（图片、音频、视频、字幕、其他文件）。仓库：`cola4565/framekit`，当前版本 **1.3.4**，已发布 Windows NSIS 安装包与 macOS DMG（arm64 / x64）。
 
 ## 技术栈
 
@@ -30,6 +30,8 @@ electron/
   download-history.ts  下载记录持久化（最多 200 条）
   media-protocol.ts    framekit-media:// 预览代理（补请求头、转发 Range）
   thumbnail.ts        framekit-thumb:// 视频封面抽帧（ffmpeg 首帧 + 浏览器回退）
+  github-fallback.ts  GitHub 免鉴权端点解析（tag / atom feed / 资产列表 / 自建 feed）
+  update-settings.ts  更新设置持久化（更新源 / 镜像 / 代理）
   storage.ts           数据根目录选择、旧数据迁移、非 C 盘路径配置
   cache-cleanup.ts     清理 Electron 缓存，保留 Cookie、登录态、下载历史与用户素材
   updater.ts           GitHub Releases 检查更新 + 更新包下载/静默安装
@@ -55,6 +57,10 @@ scripts/               冒烟测试、演示服务器、构建清理
 - **预览代理**：`framekit-media://media/?url=...&referer=...`。新增 scheme 时记得同步 `index.html` 的 CSP（`img-src` / `media-src` 已包含 `framekit-media:`）。
 - **视频封面**：解析阶段先从 `<video poster>` / Open Graph / 结构化缩略图回填；仍无封面时由 `electron/thumbnail.ts` 用内置 ffmpeg 抽首帧（`scale=480:-2 -q:v 4 -f mjpeg`），ffmpeg 失败回退到隐藏 BrowserWindow `capturePage()`。走自定义 scheme `framekit-thumb://thumb/?url=...&referer=...`，`index.html` 的 CSP `img-src` 需包含 `framekit-thumb:`。封面缓存在 `userData/thumbnails/<sha1>.jpg`，上限 200 个，按 mtime 淘汰。
 - **封面请求头要跟站点走**：抽帧请求头与 `electron/downloader.ts` 的 `requestHeaders` 保持一致（Bilibili 需要 `Range: bytes=0-` + Referer + Cookie，抖音 / 爱给网按页面来源带 Referer 与 Cookie）。微博等 CDN 直链返回 403 时，必须使用完整签名 URL（含 `ssig` / `Expires` / `label` / `media_id` 等参数），简化 URL 必然失败。
+- **检查更新有多条通道**：`electron/updater.ts` 按顺序尝试「自建更新源 → GitHub API → GitHub 网页端点」，任一通道成功即返回，`UpdateCheckResult.source` 标记实际来源（`feed` / `api` / `web`）。GitHub API 对代理出口 IP 的匿名请求限流很严（403 / 429），网页通道不消耗 API 配额。
+- **Electron 的 net.fetch 拿不到重定向后的 URL**：`response.url` 是空串，`redirect: 'manual'` 会抛 `Redirect was cancelled`。取最新 tag 要从 `releases/latest` 页面的 `og:url` 里解析，或用 atom feed 的第一个条目。magpie 用的是 Go 的 `http.Client`（能读 `Location` 头），不能直接照搬。
+- **atom feed 的 id 不是 releases/tag 格式**：形如 `tag:github.com,2008:Repository/1459836626/v1.3.3`，版本号在最后一段。
+- **更新设置**：`electron/update-settings.ts` 存在 `userData/config/update-settings.json`。自定义更新源是不消耗 GitHub 配额的兜底；镜像只改下载地址，SHA-512 校验仍按官方清单执行；代理只影响更新检查与下载。
 - **预览用最低清晰度，下载用所选清晰度**：`lowestQualityVariant()` 按 `groupId` 找同组资源，`PreviewModal` 的 `playbackResource` 与 `resource` 分离。
 - **下载队列**：记录持久化；删除记录会删磁盘文件；删除时先 `abort` 并等待运行中的 Promise 结束再删，避免“删完又被重命名写回”；打开队列每 5 秒校验文件是否存在。
 - **关闭与托盘**：关闭按钮统一走 `window:close-request` → 渲染层确认弹窗 → `window:close-action`；托盘常驻，Windows 最小化隐藏到系统托盘，macOS 使用菜单栏模板图标且原生黄色最小化保留 Dock 行为。
@@ -139,6 +145,9 @@ UI 冒烟需要两个后台进程：`npm run demo`（127.0.0.1:8787）与 `FRAME
 | 开发模式点更新报错 | `electron-updater` 需要打包后的 `app-update.yml` | 用 `release/win-unpacked/FrameKit.exe` 或安装版测试 |
 | 视频没有封面 / 预览只显示占位图 | 页面没有 `poster` / `og:image`，播放失败时也没有兜底画面 | 抽帧封面兜底：`electron/thumbnail.ts` 走 `framekit-thumb://`，播放失败时 `PreviewModal` 显示封面 |
 | 微博视频封面请求 403 | CDN 直链需要完整签名参数，简化 URL 无效 | 使用解析得到的完整签名 URL（`ssig` / `Expires` / `label` / `media_id`），并带正确 Referer |
+| 检查更新提示"请求频率受限" | GitHub API 对代理出口 IP 限流（匿名配额 60/小时/IP） | 自动回退网页通道；必要时在更新设置里填自建更新源 |
+| 网页通道拿不到最新版本号 | Electron `net.fetch` 不暴露重定向后的 `response.url` | 从 `releases/latest` 的 `og:url` 解析 tag，或用 atom feed 第一个条目 |
+| Electron 开发模式启动即 FATAL | `node_modules/electron/dist` 的 ACL 缺少 ALL APPLICATION PACKAGES 沙箱读取权 | `icacls "node_modules\electron\dist" /grant *S-1-15-2-1:(OI)(CI)(RX) /T`（需在 cmd 里跑，PowerShell 会吃掉括号） |
 
 ## 边界与后续方向
 

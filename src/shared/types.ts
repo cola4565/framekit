@@ -122,6 +122,15 @@ export interface UpdateCheckResult {
   downloadUrl: string | null
   downloadName: string | null
   canAutoUpdate?: boolean
+  /** 更新信息来自哪个通道：api / web / feed，便于排查限流问题。 */
+  source?: 'api' | 'web' | 'feed'
+}
+
+export interface UpdateSettings {
+  source: 'github' | 'custom'
+  feedUrl: string
+  mirror: string
+  proxy: string
 }
 
 export interface UpdateDownloadState {
@@ -141,6 +150,8 @@ export interface FramekitApi {
   respondToClose?: (action: WindowCloseAction) => Promise<boolean>
   onCloseRequest?: (callback: () => void) => () => void
   checkForUpdates: () => Promise<UpdateCheckResult>
+  getUpdateSettings?: () => Promise<UpdateSettings>
+  saveUpdateSettings?: (settings: Partial<UpdateSettings>) => Promise<UpdateSettings>
   downloadUpdate?: () => Promise<void>
   installUpdate?: () => Promise<void>
   onUpdateProgress?: (callback: (state: UpdateDownloadState) => void) => () => void

@@ -39,12 +39,14 @@ import {
   registerThumbnailScheme
 } from './thumbnail'
 import {
+  applyUpdateProxy,
   canAutoUpdate,
   checkForUpdates,
   downloadUpdate,
   initializeUpdater,
   installUpdate
 } from './updater'
+import { getUpdateSettings, saveUpdateSettings } from './update-settings'
 
 const isMac = process.platform === 'darwin'
 let mainWindow: BrowserWindow | null = null
@@ -283,6 +285,15 @@ function registerIpc(): void {
     ...(await checkForUpdates(app.getVersion())),
     canAutoUpdate: canAutoUpdate()
   }))
+
+  ipcMain.handle('updates:get-settings', () => getUpdateSettings())
+
+  ipcMain.handle('updates:save-settings', (_event, settings) => {
+    const saved = saveUpdateSettings(settings ?? {})
+    // 代理设置立即生效，下次下载会用新代理。
+    void applyUpdateProxy(saved.proxy)
+    return saved
+  })
 
   ipcMain.handle('updates:download', async () => downloadUpdate())
 

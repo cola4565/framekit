@@ -39,6 +39,14 @@ $env:FRAMEKIT_DEBUG_PORT='9222'; npm run dev
 # 之后可用 CDP: http://127.0.0.1:9222/json
 ```
 
+如果 `npm run dev` 启动即报 `FATAL: ... Sandboxed processes cannot read ...\node_modules\electron\dist`，说明 Electron 二进制的 ACL 缺了沙箱读取权限（重装 Electron 或复制仓库后常见）。在 cmd 里执行（PowerShell 会把括号当成语法）：
+
+```cmd
+icacls "node_modules\electron\dist" /grant *S-1-15-2-1:(OI)(CI)(RX) /T
+```
+
+这只影响开发模式；打包产物在 `release\win-unpacked`，不受影响。
+
 ## 3. 测试矩阵
 
 | 命令 | 覆盖范围 | 依赖 |
@@ -47,6 +55,7 @@ $env:FRAMEKIT_DEBUG_PORT='9222'; npm run dev
 | `npm run test:parser` | 静态解析、去重、分类 | 无 |
 | `npm run test:download` | 普通文件下载、重名处理 | 无 |
 | `npm run test:update` | semver 比较与资产选择 | 无 |
+| `npm run test:github` | 更新回退通道的解析：tag / atom feed / 资产列表 / 自建 feed / API 路由 / 镜像 | 无 |
 | `npm run test:deep` | 深度嗅探 | Electron |
 | `npm run test:bilibili` | 真实 Bilibili 解析 + 下载 + ffmpeg 合并 + 轨道校验 | 网络、Electron、可能需登录 |
 | `npm run test:ui` | 真实界面解析 / 下载 / 角标 / 截图 | 需先启动 demo 与 dev |

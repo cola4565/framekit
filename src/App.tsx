@@ -34,7 +34,8 @@ import type {
   ParseResult,
   ResourceKind,
   UpdateCheckResult,
-  UpdateDownloadState
+  UpdateDownloadState,
+  UpdateSettings
 } from './shared/types'
 import {
   formatBytes,
@@ -104,6 +105,7 @@ export default function App(): React.JSX.Element {
   const [updateResult, setUpdateResult] = useState<UpdateCheckResult | null>(null)
   const [updateError, setUpdateError] = useState<string | null>(null)
   const [updateDownload, setUpdateDownload] = useState<UpdateDownloadState | null>(null)
+  const [updateSettings, setUpdateSettings] = useState<UpdateSettings | null>(null)
   const [bilibiliLoggedIn, setBilibiliLoggedIn] = useState(false)
   const [bilibiliLoginBusy, setBilibiliLoginBusy] = useState(false)
   const [aigeiLoggedIn, setAigeiLoggedIn] = useState(false)
@@ -389,6 +391,11 @@ export default function App(): React.JSX.Element {
     setUpdateChecking(true)
     setUpdateError(null)
     setUpdateDownload((current) => (current?.phase === 'error' ? null : current))
+    // 更新设置按需读取；旧版本 preload 没有这个方法时静默跳过。
+    void window.framekit
+      .getUpdateSettings?.()
+      .then((settings) => setUpdateSettings(settings ?? null))
+      .catch(() => undefined)
     try {
       const info = await window.framekit.checkForUpdates()
       setUpdateResult(info)
@@ -1228,6 +1235,7 @@ export default function App(): React.JSX.Element {
           checking={updateChecking}
           error={updateError}
           downloadState={updateDownload}
+          settings={updateSettings}
           onClose={() => setUpdateOpen(false)}
           onRetry={() => void handleCheckUpdates()}
           onStartUpdate={() => void handleStartUpdate()}
@@ -1237,6 +1245,10 @@ export default function App(): React.JSX.Element {
             notify('安装包下载已在浏览器中打开', 'success')
           }}
           onOpenRelease={(targetUrl) => void openExternal(targetUrl)}
+          onSettingsSaved={(settings) => {
+            setUpdateSettings(settings)
+            notify('更新设置已保存', 'success')
+          }}
         />
       )}
 

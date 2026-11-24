@@ -8,7 +8,8 @@ import type {
   ParseResult,
   StartDownloadsResult,
   UpdateCheckResult,
-  UpdateDownloadState
+  UpdateDownloadState,
+  UpdateSettings
 } from '../src/shared/types'
 
 const api: FramekitApi = {
@@ -22,6 +23,9 @@ const api: FramekitApi = {
     return () => ipcRenderer.removeListener('window:close-request', listener)
   },
   checkForUpdates: (): Promise<UpdateCheckResult> => ipcRenderer.invoke('updates:check'),
+  getUpdateSettings: (): Promise<UpdateSettings> => ipcRenderer.invoke('updates:get-settings'),
+  saveUpdateSettings: (settings: Partial<UpdateSettings>): Promise<UpdateSettings> =>
+    ipcRenderer.invoke('updates:save-settings', settings),
   downloadUpdate: (): Promise<void> => ipcRenderer.invoke('updates:download'),
   installUpdate: (): Promise<void> => ipcRenderer.invoke('updates:install'),
   onUpdateProgress: (callback: (state: UpdateDownloadState) => void) => {

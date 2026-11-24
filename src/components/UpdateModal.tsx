@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import {
   AlertCircle,
   ArrowDownToLine,
@@ -7,11 +7,17 @@ import {
   Loader2,
   RefreshCw,
   RotateCw,
+  Settings2,
   Sparkles,
   X
 } from 'lucide-react'
-import type { UpdateCheckResult, UpdateDownloadState } from '../shared/types'
+import type {
+  UpdateCheckResult,
+  UpdateDownloadState,
+  UpdateSettings
+} from '../shared/types'
 import { formatBytes, formatSpeed } from '../shared/format'
+import UpdateSettingsPanel from './UpdateSettingsPanel'
 
 interface UpdateModalProps {
   currentVersion: string
@@ -19,13 +25,17 @@ interface UpdateModalProps {
   checking: boolean
   error: string | null
   downloadState: UpdateDownloadState | null
+  settings: UpdateSettings | null
   onClose: () => void
   onRetry: () => void
   onStartUpdate: () => void
   onInstall: () => void
   onDownloadInstaller: (url: string) => void
   onOpenRelease: (url: string) => void
+  onSettingsSaved: (settings: UpdateSettings) => void
 }
+
+const RELEASES_PAGE = 'https://github.com/cola4565/framekit/releases/latest'
 
 function releaseDate(value: string): string {
   if (!value) return ''
@@ -44,18 +54,26 @@ function packageLabel(): string {
   return '安装包'
 }
 
+function sourceLabel(source: UpdateCheckResult['source']): string {
+  if (source === 'feed') return '自定义更新源'
+  if (source === 'web') return 'GitHub 网页'
+  return 'GitHub API'
+}
+
 export default function UpdateModal({
   currentVersion,
   result,
   checking,
   error,
   downloadState,
+  settings,
   onClose,
   onRetry,
   onStartUpdate,
   onInstall,
   onDownloadInstaller,
-  onOpenRelease
+  onOpenRelease,
+  onSettingsSaved
 }: UpdateModalProps): React.JSX.Element {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
@@ -78,6 +96,7 @@ export default function UpdateModal({
   const failed = phase === 'error'
   const percent = Math.max(0, Math.min(100, downloadState?.percent ?? 0))
   const manualOnly = hasUpdate && !canAutoUpdate
+  const [showSettings, setShowSettings] = useState(false)
 
   return (
     <div className="modal-backdrop update-backdrop" role="presentation" onMouseDown={onClose}>
@@ -116,6 +135,10 @@ export default function UpdateModal({
             </div>
           </div>
 
+          {showSettings && (
+            <UpdateSettingsPanel settings={settings} onSaved={onSettingsSaved} />
+          )}
+
           {checking && (
             <div className="update-state">
               <Loader2 size={30} className="spin" />
@@ -129,10 +152,20 @@ export default function UpdateModal({
               <AlertCircle size={30} />
               <h3>暂时无法检查更新</h3>
               <p>{error}</p>
-              <button type="button" className="button ghost" onClick={onRetry}>
-                <RefreshCw size={14} />
-                重新检查
-              </button>
+              <div className="update-error-actions">
+                <button type="button" className="button ghost" onClick={onRetry}>
+                  <RefreshCw size={14} />
+                  重新检查
+                </button>
+                <button
+                  type="button"
+                  className="button ghost"
+                  onClick={() => onOpenRelease(RELEASES_PAGE)}
+                >
+                  <ExternalLink size={14} />
+                  打开发布页
+                </button>
+              </div>
             </div>
           )}
 
@@ -219,8 +252,19 @@ export default function UpdateModal({
         </div>
 
         <footer className="update-footer">
-          <span className="update-source">GitHub · {result?.releaseTag || 'latest release'}</span>
+          <span className="update-source">
+            {sourceLabel(result?.source)} · {result?.releaseTag || 'latest release'}
+          </span>
           <div className="update-actions">
+            <button
+              type="button"
+              className={`button ghost${showSettings ? ' is-active' : ''}`}
+              onClick={() => setShowSettings((value) => !value)}
+              title="更新设置"
+            >
+              <Settings2 size={14} />
+              设置
+            </button>
             {result && (
               <button
                 type="button"

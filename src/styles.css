@@ -3225,6 +3225,13 @@ label:focus-within {
   line-height: 1.75;
 }
 
+.update-error-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+
 .update-release {
   margin-top: 13px;
   padding: 15px 16px;
@@ -3422,6 +3429,85 @@ label:focus-within {
   flex: 0 0 auto;
   align-items: center;
   gap: 7px;
+}
+
+.update-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 14px 15px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.015);
+}
+
+.update-settings-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.update-settings-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 610;
+}
+
+.update-settings-head small {
+  color: var(--subtle);
+  font-size: 8px;
+}
+
+.update-settings-row {
+  display: grid;
+  grid-template-columns: 74px 1fr;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.update-settings-row label {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.update-settings-row input,
+.update-settings-row select {
+  width: 100%;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.28);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 10px;
+  outline: none;
+}
+
+.update-settings-row input:focus,
+.update-settings-row select:focus {
+  border-color: rgba(255, 106, 61, 0.5);
+}
+
+.update-settings-row small {
+  grid-column: 2;
+  color: var(--subtle);
+  font-size: 8px;
+  line-height: 1.6;
+}
+
+.update-settings-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.button.ghost.is-active {
+  border-color: rgba(255, 106, 61, 0.45);
+  color: var(--accent-light);
 }
 
 @media (max-width: 1330px) {

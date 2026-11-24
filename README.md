@@ -4,7 +4,7 @@
 
 支持 Windows 与 macOS，基于 Electron + React + TypeScript 构建，解析与下载全部在本机完成。
 
-当前正式版：**v1.3.3**
+当前正式版：**v1.3.4**
 
 ![FrameKit 素材解析界面](docs/screenshot-results.png)
 
@@ -12,9 +12,9 @@
 
 ## 下载
 
-- [FrameKit 1.3.3 · Windows x64 安装包](https://github.com/cola4565/framekit/releases/download/v1.3.3/FrameKit-1.3.3-Windows-x64.exe)
-- [FrameKit 1.3.3 · macOS Apple Silicon](https://github.com/cola4565/framekit/releases/download/v1.3.3/FrameKit-1.3.3-macOS-arm64.dmg)
-- [FrameKit 1.3.3 · macOS Intel](https://github.com/cola4565/framekit/releases/download/v1.3.3/FrameKit-1.3.3-macOS-x64.dmg)
+- [FrameKit 1.3.4 · Windows x64 安装包](https://github.com/cola4565/framekit/releases/download/v1.3.4/FrameKit-1.3.4-Windows-x64.exe)
+- [FrameKit 1.3.4 · macOS Apple Silicon](https://github.com/cola4565/framekit/releases/download/v1.3.4/FrameKit-1.3.4-macOS-arm64.dmg)
+- [FrameKit 1.3.4 · macOS Intel](https://github.com/cola4565/framekit/releases/download/v1.3.4/FrameKit-1.3.4-macOS-x64.dmg)
 - [全部版本与更新说明](https://github.com/cola4565/framekit/releases)
 
 Windows 首次安装可以选择安装盘和目录，默认装到 `%LOCALAPPDATA%\Programs\framekit`，也支持 `D:\FrameKit` 等位置；之后可直接在应用内静默更新。从 1.2.0 及更早版本升级需要手动安装一次。macOS 安装包暂未配置 Apple 开发者签名与公证，首次运行时系统可能提示未知开发者；macOS 的应用内静默安装也要等签名配置完成后启用。
@@ -33,7 +33,8 @@ Windows 卸载时会删除下载记录、登录态、设置和所有缓存，只
 - **Bilibili 专用解析**：读取账号可用的清晰度列表（含大会员 4K/1080P+ 等），分别下载独立视频流与音频流，并用内置 ffmpeg 自动合并为标准 MP4。
 - **抖音专用解析**：捕获 DASH（Dynamic Adaptive Streaming over HTTP，动态自适应流媒体）视频流与独立音频流，按会话参数配对后用内置 ffmpeg 自动合并为标准 MP4；需要登录时可在应用内完成抖音登录。
 - **爱给网专用解析**：搜索页读取公开低清预览；条目页通过站点正常登录流程读取 1080P/720P 等下载规格。未登录或权限不足时只保留公开预览，不绕过登录、验证码、会员或付费限制。
-- **应用内静默更新**：右上角“检查更新”读取 GitHub 最新正式版；Windows 版点击“立即更新”后在后台下载，完成后一键重启安装，不弹出安装向导、不询问安装位置。
+- **应用内静默更新**：右上角“检查更新”读取 GitHub 最新正式版；Windows 版点击“立即更新”后在后台下载，完成后一键重启安装，不弹出安装向导、不询问安装位置。GitHub 接口限流时会自动改用网页通道读取，不会直接失败。
+- **更新设置**：可在更新弹窗里切换更新源（GitHub 官方 / 自建更新源）、设置更新专用代理、配置下载镜像；网络受限时不用等官方放行。
 - **后台运行**：关闭窗口时选择最小化到系统托盘 / 菜单栏，下载任务继续执行；托盘右键可直接退出。
 - **跨平台打包**：Windows NSIS（Nullsoft Scriptable Install System，安装包制作系统）安装包与 macOS DMG（Apple Disk Image，苹果磁盘映像）配置；应用图标已生成。
 - **Windows 数据不落 C 盘**：应用数据、缓存、日志、临时文件和更新器缓存统一放在安装盘的 `FrameKitData`（例如 `D:\FrameKitData`）；旧版 C 盘数据会在首次启动时迁移并删除。macOS 继续使用系统标准的 `~/Library/Application Support`。
