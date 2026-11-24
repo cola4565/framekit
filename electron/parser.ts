@@ -14,6 +14,7 @@ import {
 import { extractBilibiliPage, isBilibiliVideoUrl } from './bilibili'
 import { extractDouyinPage, isDouyinVideoUrl } from './douyin'
 import { extractAigeiItemPage, isAigeiItemUrl } from './aigei'
+import { extractWeiboPage, isWeiboVideoUrl } from './weibo'
 import { sniffPage } from './sniffer'
 
 type ProgressReporter = (progress: ParseProgress) => void
@@ -194,6 +195,58 @@ export async function parsePage(
       }
     } catch (error) {
       const warning = `抖音专用解析失败：${
+        error instanceof Error ? error.message : '未知错误'
+      }`
+      if (!options.deep) {
+        return {
+          ...quickResult,
+          warnings: uniqueWarnings([...quickResult.warnings, warning]),
+          elapsedMs: Date.now() - startedAt
+        }
+      }
+      quickResult = {
+        ...quickResult,
+        warnings: uniqueWarnings([...quickResult.warnings, warning])
+      }
+    }
+  }
+
+  // 微博未登录时会先跳访客系统，静态扫描的 finalUrl 变成了 passport.weibo.com，
+  // 所以这里要同时看原始地址。
+  const weiboTarget = isWeiboVideoUrl(pageUrl)
+    ? pageUrl
+    : isWeiboVideoUrl(quickResult.finalUrl || '')
+      ? (quickResult.finalUrl as string)
+      : null
+
+  if (weiboTarget) {
+    onProgress({
+      stage: 'browser',
+      message: '识别到微博视频，正在通过访客系统读取播放地址…',
+      percent: 48
+    })
+    try {
+      const weibo = await extractWeiboPage(weiboTarget, onProgress)
+      onProgress({
+        stage: 'done',
+        message: `微博解析完成，共 ${weibo.resources.length} 项资源`,
+        percent: 100
+      })
+      return {
+        ...quickResult,
+        finalUrl: weibo.finalUrl || quickResult.finalUrl,
+        title: weibo.title || quickResult.title,
+        description: weibo.description ?? quickResult.description,
+        siteName: 'weibo.com',
+        favicon: weibo.favicon ?? quickResult.favicon,
+        mode: 'deep',
+        resources: weibo.resources,
+        stats: statsForResources(weibo.resources),
+        warnings: warningsAfterDedicatedParse([...quickResult.warnings, ...weibo.warnings]),
+        elapsedMs: Date.now() - startedAt
+      }
+    } catch (error) {
+      const warning = `微博专用解析失败：${
         error instanceof Error ? error.message : '未知错误'
       }`
       if (!options.deep) {

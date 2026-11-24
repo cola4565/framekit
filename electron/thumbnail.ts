@@ -8,6 +8,7 @@ import ffmpegStatic from 'ffmpeg-static'
 import { getAigeiCookieHeader } from './aigei'
 import { getBilibiliCookieHeader } from './bilibili'
 import { getDouyinCookieHeader } from './douyin'
+import { getWeiboCookieHeader } from './weibo'
 
 export const THUMBNAIL_SCHEME = 'framekit-thumb'
 
@@ -78,6 +79,20 @@ function isAigeiPageUrl(rawUrl: string): boolean {
   }
 }
 
+function isWeiboPageUrl(rawUrl: string): boolean {
+  try {
+    const hostname = new URL(rawUrl).hostname.toLowerCase()
+    return (
+      hostname === 'weibo.com' ||
+      hostname.endsWith('.weibo.com') ||
+      hostname === 'weibo.cn' ||
+      hostname.endsWith('.weibo.cn')
+    )
+  } catch {
+    return false
+  }
+}
+
 function requestHeaders(request: ThumbnailRequest): Record<string, string> {
   const headers: Record<string, string> = {
     'user-agent': USER_AGENT,
@@ -92,6 +107,10 @@ function requestHeaders(request: ThumbnailRequest): Record<string, string> {
     if (request.cookie) headers.cookie = request.cookie
   } else if (isAigeiPageUrl(request.referer ?? '')) {
     headers.referer = request.referer || 'https://www.aigei.com/'
+    if (request.cookie) headers.cookie = request.cookie
+  } else if (isWeiboPageUrl(request.referer ?? '')) {
+    // 微博 CDN 直链要带来源页与访客 Cookie，否则 403。
+    headers.referer = request.referer || 'https://weibo.com/'
     if (request.cookie) headers.cookie = request.cookie
   } else if (request.referer) {
     headers.referer = request.referer
@@ -370,6 +389,9 @@ async function resolveCookie(referer: string | null): Promise<string | undefined
     }
     if (isAigeiPageUrl(referer)) {
       return (await getAigeiCookieHeader()) || undefined
+    }
+    if (isWeiboPageUrl(referer)) {
+      return (await getWeiboCookieHeader()) || undefined
     }
   } catch {
     return undefined

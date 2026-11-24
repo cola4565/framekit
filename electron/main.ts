@@ -31,6 +31,7 @@ import {
   isDouyinPageUrl,
   loginDouyin
 } from './douyin'
+import { getWeiboAuthStatus, loginWeibo } from './weibo'
 import { installMediaProtocol, registerMediaScheme } from './media-protocol'
 import { parsePage } from './parser'
 import { migrateLegacyStorage, prepareStorage } from './storage'
@@ -318,6 +319,10 @@ function registerIpc(): void {
   ipcMain.handle('douyin:auth-status', async () => getDouyinAuthStatus())
 
   ipcMain.handle('douyin:login', async () => loginDouyin(mainWindow))
+
+  ipcMain.handle('weibo:auth-status', async () => getWeiboAuthStatus())
+
+  ipcMain.handle('weibo:login', async () => loginWeibo(mainWindow))
 
   ipcMain.handle('parse:page', async (event, rawUrl: unknown, rawOptions: unknown) => {
     if (typeof rawUrl !== 'string') throw new Error('网址参数无效')

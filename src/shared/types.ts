@@ -161,6 +161,8 @@ export interface FramekitApi {
   loginAigei: () => Promise<boolean>
   getDouyinAuthStatus: () => Promise<boolean>
   loginDouyin: () => Promise<boolean>
+  getWeiboAuthStatus?: () => Promise<boolean>
+  loginWeibo?: () => Promise<boolean>
   parsePage: (url: string, options: ParseOptions) => Promise<ParseResult>
   onParseProgress: (callback: (progress: ParseProgress) => void) => () => void
   chooseDirectory: () => Promise<string | null>

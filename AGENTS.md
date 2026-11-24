@@ -1,6 +1,6 @@
 # FrameKit 项目基线
 
-面向视频剪辑 / 后期工作者的跨平台桌面工具箱。当前只有一个模块：**网页素材解析器**（图片、音频、视频、字幕、其他文件）。仓库：`cola4565/framekit`，当前版本 **1.3.4**，已发布 Windows NSIS 安装包与 macOS DMG（arm64 / x64）。
+面向视频剪辑 / 后期工作者的跨平台桌面工具箱。当前只有一个模块：**网页素材解析器**（图片、音频、视频、字幕、其他文件）。仓库：`cola4565/framekit`，当前版本 **1.3.5**，已发布 Windows NSIS 安装包与 macOS DMG（arm64 / x64）。
 
 ## 技术栈
 
@@ -26,6 +26,7 @@ electron/
   bilibili.ts          Bilibili 会话、登录、播放信息、清晰度与音轨匹配
   douyin.ts            抖音持久会话、登录、DASH 流捕获与音视频配对
   aigei.ts             爱给网持久会话、登录、下载规格读取与正常下载入口
+  weibo.ts             微博视频解析（mid 提取、访客身份、移动端接口直取 + 浏览器兜底）
   downloader.ts        下载队列：并发 3、Range/Referer/Cookie、DASH 合并、取消、删除
   download-history.ts  下载记录持久化（最多 200 条）
   media-protocol.ts    framekit-media:// 预览代理（补请求头、转发 Range）
@@ -53,6 +54,10 @@ scripts/               冒烟测试、演示服务器、构建清理
 - **抖音是 DASH**：视频流与音频流分离，按 URL 的 `l` 参数配对；下载后由 ffmpeg 合并为标准 MP4。抖音登录使用 `persist:douyin`，检测 `sessionid` / `sessionid_ss` / `sid_tt`。
 - **爱给网搜索页与条目页不同**：搜索页只读取 `fast-video-url` 的 Base64 低清预览，并过滤掉站点 UI 图片；条目页通过 CDP（Chrome DevTools Protocol，浏览器调试协议）读取下载规格与登录状态。
 - **爱给网登录与下载**：`persist:aigei` 保存站点登录态；只调用页面正常的 `itemFileDown` 入口。未登录、验证码、VIP、铜币或商用授权限制都必须保留提示，不得绕过。
+- **微博视频靠 mid 解析，不靠嗅探**：微博未登录时先跳 `passport.weibo.com/visitor/visitor` 算设备指纹，静态扫描只能拿到 9KB 的访客系统页。正确做法是从地址里取出 mid —— `tv/show/<oid>:<mid>` 路径里的、或个人主页 `?layerid=<mid>` 的（layerid 就是被点开那条视频的 mid）—— 再用 `m.weibo.cn/statuses/show?id=<mid>` 取 `page_info.media_info.stream_url`。接口通常 1 秒内返回，浏览器嗅探要 7 秒以上且常失败。
+- **微博接口的字段形态**：`page_info.page_pic` 是 `{ url, width, height }` 对象不是字符串；`media_info` 只有 `stream_url` / `stream_url_hd` / `duration` 三个字段；接口要用手机 UA（iPhone）才直接响应，否则要先拿访客 Cookie。`Session.fetch` 的 `json()` 不可靠，统一用 `text()` 再 `JSON.parse`。
+- **微博访客身份**：`persist:weibo` 保存 SUB Cookie。`ensureVisitorIdentity()` 访问一次 `m.weibo.cn` 就能拿到，之后接口与页面都能用，不必每次重算指纹。
+- **专用解析的判断要看原始地址**：`parsePage` 里微博的判断必须用 `pageUrl`（用户输入的原始地址），不能用静态扫描的 `finalUrl`——微博会把它改成 `passport.weibo.com`，导致适配器根本不触发。
 - **webRequest 监听必须回调**：Electron 的 `webRequest.onBeforeRequest` 监听器必须调用 `callback({})`，否则会挂起页面请求。爱给网曾因漏掉回调导致下载按钮和预览全部读不到。
 - **预览代理**：`framekit-media://media/?url=...&referer=...`。新增 scheme 时记得同步 `index.html` 的 CSP（`img-src` / `media-src` 已包含 `framekit-media:`）。
 - **视频封面**：解析阶段先从 `<video poster>` / Open Graph / 结构化缩略图回填；仍无封面时由 `electron/thumbnail.ts` 用内置 ffmpeg 抽首帧（`scale=480:-2 -q:v 4 -f mjpeg`），ffmpeg 失败回退到隐藏 BrowserWindow `capturePage()`。走自定义 scheme `framekit-thumb://thumb/?url=...&referer=...`，`index.html` 的 CSP `img-src` 需包含 `framekit-thumb:`。封面缓存在 `userData/thumbnails/<sha1>.jpg`，上限 200 个，按 mtime 淘汰。
@@ -88,7 +93,7 @@ UI 冒烟需要两个后台进程：`npm run demo`（127.0.0.1:8787）与 `FRAME
 ## 数据位置
 
 - Windows 打包版数据根目录：安装盘下的 `FrameKitData`，例如装在 `D:\FrameKit` 时使用 `D:\FrameKitData`；装在 C 盘时会优先选第一个可写的非 C 盘。`FRAMEKIT_DATA_DIR` 可覆盖。
-  - `data/`：Electron `userData` / `sessionData`，包含 `download-history.json`、`Partitions/bilibili|douyin|aigei/`、Local Storage、Preferences
+  - `data/`：Electron `userData` / `sessionData`，包含 `download-history.json`、`Partitions/bilibili|douyin|aigei|weibo/`、Local Storage、Preferences
   - `cache/`、`logs/`、`crashDumps/`、`temp/`、`local/`、`roaming/`：Chromium 缓存、日志、崩溃转储、临时文件与进程级环境目录
   - `local/framekit-updater/`：electron-updater 下载缓存
   - `.framekit-data`：卸载器用来确认这是 FrameKit 数据目录的标记文件
@@ -148,6 +153,9 @@ UI 冒烟需要两个后台进程：`npm run demo`（127.0.0.1:8787）与 `FRAME
 | 检查更新提示"请求频率受限" | GitHub API 对代理出口 IP 限流（匿名配额 60/小时/IP） | 自动回退网页通道；必要时在更新设置里填自建更新源 |
 | 网页通道拿不到最新版本号 | Electron `net.fetch` 不暴露重定向后的 `response.url` | 从 `releases/latest` 的 `og:url` 解析 tag，或用 atom feed 第一个条目 |
 | Electron 开发模式启动即 FATAL | `node_modules/electron/dist` 的 ACL 缺少 ALL APPLICATION PACKAGES 沙箱读取权 | `icacls "node_modules\electron\dist" /grant *S-1-15-2-1:(OI)(CI)(RX) /T`（需在 cmd 里跑，PowerShell 会吃掉括号） |
+| 微博个人主页地址解析不出视频 | `layerid` 被页面丢弃，且列表是 SPA 懒加载，嗅探抓不到 | 从地址取 `layerid` 作为 mid，走移动端接口直取播放地址 |
+| 微博接口报 `data argument must be of type string` | `page_info.page_pic` 是对象被当成字符串传给了 `makeResource` | 用 `extractPosterUrl()` 兼容对象与字符串两种形态 |
+| 微博接口拿不到某条 mid | 该条在移动端接口不可见 | 回退内置浏览器嗅探 `tv/show` 页的真实网络请求 |
 
 ## 边界与后续方向
 

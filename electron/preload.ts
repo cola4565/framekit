@@ -41,6 +41,8 @@ const api: FramekitApi = {
   loginAigei: (): Promise<boolean> => ipcRenderer.invoke('aigei:login'),
   getDouyinAuthStatus: (): Promise<boolean> => ipcRenderer.invoke('douyin:auth-status'),
   loginDouyin: (): Promise<boolean> => ipcRenderer.invoke('douyin:login'),
+  getWeiboAuthStatus: (): Promise<boolean> => ipcRenderer.invoke('weibo:auth-status'),
+  loginWeibo: (): Promise<boolean> => ipcRenderer.invoke('weibo:login'),
   parsePage: (url: string, options: ParseOptions): Promise<ParseResult> =>
     ipcRenderer.invoke('parse:page', url, options),
   onParseProgress: (callback: (progress: ParseProgress) => void) => {

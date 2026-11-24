@@ -112,6 +112,8 @@ export default function App(): React.JSX.Element {
   const [aigeiLoginBusy, setAigeiLoginBusy] = useState(false)
   const [douyinLoggedIn, setDouyinLoggedIn] = useState(false)
   const [douyinLoginBusy, setDouyinLoginBusy] = useState(false)
+  const [weiboLoggedIn, setWeiboLoggedIn] = useState(false)
+  const [weiboLoginBusy, setWeiboLoginBusy] = useState(false)
   const toastTimer = useRef<number | null>(null)
   const toastId = useRef(0)
 
@@ -178,6 +180,21 @@ export default function App(): React.JSX.Element {
     }
   }, [url])
 
+  const isWeiboInput = useMemo(() => {
+    try {
+      const parsed = new URL(url.trim())
+      const host = parsed.hostname
+      return (
+        host === 'weibo.com' ||
+        host.endsWith('.weibo.com') ||
+        host === 'weibo.cn' ||
+        host.endsWith('.weibo.cn')
+      )
+    } catch {
+      return false
+    }
+  }, [url])
+
   useEffect(() => {
     if (!isBilibiliInput) return
     let active = true
@@ -225,6 +242,22 @@ export default function App(): React.JSX.Element {
       active = false
     }
   }, [isDouyinInput])
+
+  useEffect(() => {
+    if (!isWeiboInput) return
+    let active = true
+    void window.framekit
+      .getWeiboAuthStatus?.()
+      .then((loggedIn) => {
+        if (active) setWeiboLoggedIn(Boolean(loggedIn))
+      })
+      .catch(() => {
+        if (active) setWeiboLoggedIn(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [isWeiboInput])
 
   useEffect(() => {
     try {
@@ -502,6 +535,28 @@ export default function App(): React.JSX.Element {
       setDouyinLoginBusy(false)
     }
   }, [douyinLoginBusy, notify])
+
+  const handleWeiboLogin = useCallback(async (): Promise<void> => {
+    if (weiboLoginBusy) return
+    const login = window.framekit.loginWeibo
+    if (typeof login !== 'function') {
+      notify('请重启 FrameKit 后再登录微博', 'error')
+      return
+    }
+    setWeiboLoginBusy(true)
+    try {
+      const loggedIn = await login()
+      setWeiboLoggedIn(loggedIn)
+      notify(
+        loggedIn ? '微博登录成功，重新解析可读取更多视频' : '微博登录未完成',
+        loggedIn ? 'success' : 'info'
+      )
+    } catch (loginError) {
+      notify(errorMessage(loginError), 'error')
+    } finally {
+      setWeiboLoginBusy(false)
+    }
+  }, [weiboLoginBusy, notify])
 
   const toggleResource = (id: string): void => {
     setSelected((current) => {
@@ -905,6 +960,28 @@ export default function App(): React.JSX.Element {
                       {douyinLoggedIn ? '抖音已登录' : '登录抖音'}
                     </button>
                   )}
+                  {isWeiboInput && (
+                    <button
+                      type="button"
+                      className={`bilibili-login-button${weiboLoggedIn ? ' is-logged-in' : ''}`}
+                      onClick={() => void handleWeiboLogin()}
+                      disabled={weiboLoginBusy}
+                      title={
+                        weiboLoggedIn
+                          ? '微博已登录；重新解析可读取仅登录可见的视频'
+                          : '登录微博，处理仅登录可见或需要验证的视频'
+                      }
+                    >
+                      {weiboLoginBusy ? (
+                        <Loader2 size={15} className="spin" />
+                      ) : weiboLoggedIn ? (
+                        <Check size={15} />
+                      ) : (
+                        <LogIn size={15} />
+                      )}
+                      {weiboLoggedIn ? '微博已登录' : '登录微博'}
+                    </button>
+                  )}
 
                 </div>
 
@@ -916,6 +993,8 @@ export default function App(): React.JSX.Element {
                         ? '爱给网登录后可读取原片；未登录只显示低清预览'
                         : isDouyinInput
                           ? '抖音会捕获独立音视频流；需要时可在应用内登录'
+                        : isWeiboInput
+                          ? '微博按视频 id 读取播放地址；登录后可看仅登录可见的内容'
                         : deep
                           ? '会启动内置浏览器，通常需要 5–15 秒'
                           : '速度最快，适合静态图和直链资源'}

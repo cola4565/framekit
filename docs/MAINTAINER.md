@@ -56,6 +56,7 @@ icacls "node_modules\electron\dist" /grant *S-1-15-2-1:(OI)(CI)(RX) /T
 | `npm run test:download` | 普通文件下载、重名处理 | 无 |
 | `npm run test:update` | semver 比较与资产选择 | 无 |
 | `npm run test:github` | 更新回退通道的解析：tag / atom feed / 资产列表 / 自建 feed / API 路由 / 镜像 | 无 |
+| `npm run test:weibo` | 微博 mid / layerid 解析与视频地址识别 | 无 |
 | `npm run test:deep` | 深度嗅探 | Electron |
 | `npm run test:bilibili` | 真实 Bilibili 解析 + 下载 + ffmpeg 合并 + 轨道校验 | 网络、Electron、可能需登录 |
 | `npm run test:ui` | 真实界面解析 / 下载 / 角标 / 截图 | 需先启动 demo 与 dev |
@@ -227,6 +228,7 @@ node github-release.mjs ───▶ Release v<version>
   - `data/Partitions/bilibili/`：删除后需重新登录 B 站
   - `data/Partitions/douyin/`：删除后需重新登录抖音
   - `data/Partitions/aigei/`：删除后需重新登录爱给网
+  - `data/Partitions/weibo/`：删除后需重新获取微博访客身份
   - `local/framekit-updater/`：更新包下载缓存
   - `.framekit-data`：卸载器识别数据目录的标记文件
 - Windows 旧版 `%APPDATA%\framekit` 会在首次启动时迁移到新目录，然后删除；旧 `%LOCALAPPDATA%\framekit*` 缓存直接清理。macOS 保持 `~/Library/Application Support/FrameKit` 默认路径，不做重定向。
