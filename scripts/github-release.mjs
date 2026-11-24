@@ -86,7 +86,8 @@ try {
 
 const assets = [
   `release/FrameKit-${version}-Windows-x64.exe`,
-  `release/FrameKit-${version}-Windows-x64.exe.blockmap`
+  `release/FrameKit-${version}-Windows-x64.exe.blockmap`,
+  'release/latest.yml'
 ]
 
 const existingAssets = await request(`${api}/releases/${release.id}/assets`)

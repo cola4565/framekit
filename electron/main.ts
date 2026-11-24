@@ -33,7 +33,13 @@ import {
 } from './douyin'
 import { installMediaProtocol, registerMediaScheme } from './media-protocol'
 import { parsePage } from './parser'
-import { checkForUpdates } from './updater'
+import {
+  canAutoUpdate,
+  checkForUpdates,
+  downloadUpdate,
+  initializeUpdater,
+  installUpdate
+} from './updater'
 
 const isMac = process.platform === 'darwin'
 let mainWindow: BrowserWindow | null = null
@@ -266,7 +272,22 @@ function registerIpc(): void {
     return false
   })
 
-  ipcMain.handle('updates:check', async () => checkForUpdates(app.getVersion()))
+  ipcMain.handle('updates:check', async () => ({
+    ...(await checkForUpdates(app.getVersion())),
+    canAutoUpdate: canAutoUpdate()
+  }))
+
+  ipcMain.handle('updates:download', async () => downloadUpdate())
+
+  ipcMain.handle('updates:install', async () => {
+    appQuitting = true
+    try {
+      await installUpdate()
+    } catch (error) {
+      appQuitting = false
+      throw error
+    }
+  })
 
   ipcMain.handle('bilibili:auth-status', async () => getBilibiliAuthStatus())
 
@@ -435,6 +456,11 @@ if (!hasLock) {
     buildMenu()
     registerIpc()
     createWindow()
+    initializeUpdater((state) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('updates:progress', state)
+      }
+    })
     ensureTray()
     void clearRuntimeCaches()
 

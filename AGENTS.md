@@ -1,17 +1,18 @@
 # FrameKit 项目基线
 
-面向视频剪辑 / 后期工作者的跨平台桌面工具箱。当前只有一个模块：**网页素材解析器**（图片、音频、视频、字幕、其他文件）。仓库：`cola4565/framekit`，当前版本 **1.2.0**，已发布 Windows NSIS 安装包与 macOS DMG（arm64 / x64）。
+面向视频剪辑 / 后期工作者的跨平台桌面工具箱。当前只有一个模块：**网页素材解析器**（图片、音频、视频、字幕、其他文件）。仓库：`cola4565/framekit`，当前版本 **1.3.0**，已发布 Windows NSIS 安装包与 macOS DMG（arm64 / x64）。
 
 ## 技术栈
 
 - Electron 45.3.3 + React 19 + TypeScript 5.9，构建用 electron-vite 6（Vite 8 / rolldown）
 - 打包 electron-builder 26，Windows 目标 NSIS x64，macOS 目标 DMG（x64 + arm64）
+- 自动更新 electron-updater 6.8（GitHub provider，读取 Release 的 `latest.yml`）
 - 解析：cheerio 1.2（静态 HTML；由 electron-vite 打入主进程包）
 - 图标：lucide-react（由 Vite 打入渲染进程包）
 - 音视频合并：ffmpeg-static 5.3.0（打包时 `asarUnpack`，运行时替换为 `app.asar.unpacked` 路径）
 - 无数据库；下载历史写在 userData 的 JSON 文件里
 
-`react`、`react-dom`、`lucide-react`、`cheerio` 已移到 `devDependencies`，因为它们会在构建时被打包；`dependencies` 只保留运行时必须由 Electron 加载的 `ffmpeg-static`。
+`react`、`react-dom`、`lucide-react`、`cheerio` 已移到 `devDependencies`，因为它们会在构建时被打包；`dependencies` 只保留运行时必须由 Electron 加载的 `ffmpeg-static` 与 `electron-updater`。
 
 ## 目录与职责
 
@@ -29,7 +30,7 @@ electron/
   download-history.ts  下载记录持久化（最多 200 条）
   media-protocol.ts    framekit-media:// 预览代理（补请求头、转发 Range）
   cache-cleanup.ts     清理 Electron 缓存，保留 Cookie、登录态、下载历史与用户素材
-  updater.ts           GitHub Releases 检查更新
+  updater.ts           GitHub Releases 检查更新 + 更新包下载/静默安装
 src/
   App.tsx              主界面状态：解析、筛选、选择、队列、更新
   components/          Sidebar / ResourceCard / PreviewModal / DownloadDrawer / UpdateModal / EmptyState
@@ -53,6 +54,9 @@ scripts/               冒烟测试、演示服务器、构建清理
 - **预览用最低清晰度，下载用所选清晰度**：`lowestQualityVariant()` 按 `groupId` 找同组资源，`PreviewModal` 的 `playbackResource` 与 `resource` 分离。
 - **下载队列**：记录持久化；删除记录会删磁盘文件；删除时先 `abort` 并等待运行中的 Promise 结束再删，避免“删完又被重命名写回”；打开队列每 5 秒校验文件是否存在。
 - **关闭与托盘**：关闭按钮统一走 `window:close-request` → 渲染层确认弹窗 → `window:close-action`；托盘常驻，Windows 最小化隐藏到系统托盘，macOS 使用菜单栏模板图标且原生黄色最小化保留 Dock 行为。
+- **静默更新**：检查版本仍走 GitHub REST API；下载与安装走 `electron-updater`。`autoDownload=false`，点击“立即更新”才下载；`quitAndInstall(true, true)` 静默安装并重启。NSIS 必须保持 `oneClick: true` + `perMachine: false`，否则会弹安装向导或每次更新请求管理员权限。`main.ts` 在调用安装前先置 `appQuitting=true`，避免关闭确认弹窗拦截。
+- **更新清单**：每次 Release 必须同时上传 `latest.yml` 与 `.exe.blockmap`；`scripts/github-release.mjs` 已包含。缺少 `latest.yml` 时 `electron-updater` 会直接报错。
+- **首次迁移**：1.2.0 及更早版本没有 `electron-updater`，升级到 1.3.0 必须手动安装一次；1.3.0 起才能应用内静默更新。macOS 未签名/未公证，暂不启用静默安装（`canAutoUpdate` 只在 Windows 打包版为 true）。
 - **安全模型**：`contextIsolation` + `sandbox`，关闭 `nodeIntegration`；渲染进程只能通过 preload 暴露的 API 操作文件与网络。
 
 ## 开发与测试
@@ -92,8 +96,8 @@ UI 冒烟需要两个后台进程：`npm run demo`（127.0.0.1:8787）与 `FRAME
 3. 打包：`npm run dist:win`（必须走可用代理，见下）
 4. 验证：安装包版本号、`app.asar.unpacked/.../ffmpeg.exe`、打包后应用跑一次解析/合并
 5. 提交并推送 `main`
-6. 创建 Release 并上传 Windows 资产，随后触发 macOS 工作流
-7. 用应用内“检查更新”确认能识别新版本
+6. 创建 Release 并上传 Windows 资产（exe + blockmap + `latest.yml`），随后触发 macOS 工作流
+7. 用应用内“检查更新”确认能识别新版本，并验证“立即更新 → 下载进度 → 重启并安装”全流程
 
 ## 网络与发布链路注意事项
 
@@ -123,6 +127,9 @@ UI 冒烟需要两个后台进程：`npm run demo`（127.0.0.1:8787）与 `FRAME
 | 爱给网搜索结果混入大量图片 | 样式表在视频过滤后又补回图片 | 视频搜索页跳过样式表扫描，并在合并后再次过滤 |
 | 爱给网动态读取被 iframe 导航打断 | 同源空白 iframe 频繁创建 | 使用 CDP `Runtime.evaluate`，不要依赖短生命周期 `executeJavaScript` |
 | `npm run test:*` 报 `spawn EPERM` | 沙箱禁止 esbuild 子进程 | 在沙箱外运行或提权 |
+| 点更新后弹 NSIS 安装向导 | 旧实现只打开安装包，且 `oneClick: false` / 允许选目录 | 改为应用内 `electron-updater` + `oneClick: true` + `perMachine: false` |
+| 自动更新报缺少 `latest.yml` | 发布脚本只上传了 exe 与 blockmap | 发布资产必须包含 `latest.yml` |
+| 开发模式点更新报错 | `electron-updater` 需要打包后的 `app-update.yml` | 用 `release/win-unpacked/FrameKit.exe` 或安装版测试 |
 
 ## 边界与后续方向
 
@@ -130,7 +137,7 @@ UI 冒烟需要两个后台进程：`npm run demo`（127.0.0.1:8787）与 `FRAME
 - HLS（`.m3u8`）目前只识别清单，分片下载与合并未实现。
 - YouTube 等站点没有专用适配器。
 - 爱给网官方 API 使用独立 API Key、额度与授权范围，不等于网页全部资源；详见 `docs/PLATFORM-NOTES.md`。
-- 安装包未做商业代码签名/公证，SmartScreen / Gatekeeper 会提示未知开发者。
+- 安装包未做商业代码签名/公证，SmartScreen / Gatekeeper 会提示未知开发者；macOS 静默更新要等签名与公证完成后再开启。
 - 可选后续：断点续传、HLS 合并、更多站点适配、下载队列暂停/重试、签名与自动更新。
 
 ## 修改代码时的约定

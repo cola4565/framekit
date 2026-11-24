@@ -1,6 +1,6 @@
 {
   "name": "framekit",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "private": true,
   "description": "FrameKit - a cross-platform toolkit for video editors and post-production artists.",
   "main": "out/main/index.js",
@@ -25,6 +25,7 @@
     "release:github": "node scripts/github-release.mjs"
   },
   "dependencies": {
+    "electron-updater": "^6.8.11",
     "ffmpeg-static": "^5.3.0"
   },
   "devDependencies": {
@@ -47,6 +48,14 @@
   "build": {
     "appId": "com.framekit.desktop",
     "productName": "FrameKit",
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "cola4565",
+        "repo": "framekit",
+        "releaseType": "release"
+      }
+    ],
     "compression": "maximum",
     "electronLanguages": [
       "zh-CN",
@@ -92,8 +101,9 @@
       "artifactName": "FrameKit-${version}-Windows-${arch}.${ext}"
     },
     "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
+      "oneClick": true,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false,
       "deleteAppDataOnUninstall": false,
       "createDesktopShortcut": true,
       "shortcutName": "FrameKit"

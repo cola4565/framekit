@@ -7,7 +7,8 @@ import type {
   ParseProgress,
   ParseResult,
   StartDownloadsResult,
-  UpdateCheckResult
+  UpdateCheckResult,
+  UpdateDownloadState
 } from '../src/shared/types'
 
 const api: FramekitApi = {
@@ -21,6 +22,15 @@ const api: FramekitApi = {
     return () => ipcRenderer.removeListener('window:close-request', listener)
   },
   checkForUpdates: (): Promise<UpdateCheckResult> => ipcRenderer.invoke('updates:check'),
+  downloadUpdate: (): Promise<void> => ipcRenderer.invoke('updates:download'),
+  installUpdate: (): Promise<void> => ipcRenderer.invoke('updates:install'),
+  onUpdateProgress: (callback: (state: UpdateDownloadState) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, state: UpdateDownloadState): void => {
+      callback(state)
+    }
+    ipcRenderer.on('updates:progress', listener)
+    return () => ipcRenderer.removeListener('updates:progress', listener)
+  },
   getBilibiliAuthStatus: (): Promise<boolean> => ipcRenderer.invoke('bilibili:auth-status'),
   loginBilibili: (): Promise<boolean> => ipcRenderer.invoke('bilibili:login'),
   getAigeiAuthStatus: (): Promise<boolean> => ipcRenderer.invoke('aigei:auth-status'),

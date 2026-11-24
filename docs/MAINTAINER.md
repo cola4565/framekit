@@ -68,7 +68,7 @@ npm run test:ui
 ### 4.1 升版本
 
 ```powershell
-npm version 1.2.0 --no-git-tag-version
+npm version 1.3.0 --no-git-tag-version
 ```
 
 同步修改：
@@ -89,6 +89,7 @@ npm run dist:win
 
 - `release/FrameKit-<version>-Windows-x64.exe`
 - `release/FrameKit-<version>-Windows-x64.exe.blockmap`
+- `release/latest.yml`（electron-updater 的版本与校验清单）
 - `release/win-unpacked/`（用于快速验证）
 
 `npm run dist:win` 会先执行构建清理，旧版本 exe、blockmap、DMG、`win-unpacked` 与旧 `out/` 不会混入本次产物。
@@ -135,7 +136,7 @@ gh auth setup-git --hostname github.com
 
 1. 读取 `package.json` 的 `version` 作为 tag（`v<version>`）
 2. 若 Release 不存在则创建，存在则 `PATCH` 正文
-3. 删除同名旧资产后上传 exe 与 blockmap 到 `uploads.github.com`
+3. 删除同名旧资产后上传 exe、blockmap 与 `latest.yml` 到 `uploads.github.com`
 4. 新 tag 会自动触发 `release.yml`（macOS 构建）；只有 tag 已存在时才需要 `TRIGGER_MACOS=1` 手动补触发
 
 执行：
@@ -160,10 +161,15 @@ gh release view v<version> --repo cola4565/framekit --json assets --jq '.assets[
 
 - `FrameKit-<version>-Windows-x64.exe`
 - `FrameKit-<version>-Windows-x64.exe.blockmap`
+- `latest.yml`
 - `FrameKit-<version>-macOS-arm64.dmg`
 - `FrameKit-<version>-macOS-x64.dmg`
 
 最后在旧版本应用中点“检查更新”，确认能识别新版本与正确安装包。
+
+Windows 还要验证静默更新链路：点击“立即更新”后应在应用内显示下载进度，完成后出现“重启并安装”，且全程不弹出 NSIS 向导、不询问安装位置。
+
+> 1.2.0 及更早版本没有内置 `electron-updater`，升级到 1.3.0 仍需手动安装一次；从 1.3.0 开始后续版本才能静默更新。macOS 应用内安装依赖 Apple 签名与公证，当前仍走 DMG 手动安装。
 
 ## 5. 发布链路说明
 
@@ -192,6 +198,9 @@ node github-release.mjs ───▶ Release v<version>
 | 打包后窗口白屏 | 检查 `out/renderer` 是否构建成功、CSP 是否拦截了新 scheme |
 | 打包后合并报“未找到内置 ffmpeg” | 确认 `asarUnpack` 与 `FFMPEG_PATH` 的 `app.asar.unpacked` 替换逻辑 |
 | 更新检查返回 403/429 | GitHub 限流；稍后重试，或确认未使用未授权的高频请求 |
+| 更新时报缺少 `latest.yml` | Release 未上传更新清单；重新执行 `npm run release:github` 或手动补传 |
+| 点“立即更新”又弹安装向导 | `nsis.oneClick` 被改回 false，或仍在运行旧版；确认安装的是 1.3.0+ |
+| 开发模式下自动更新报错 | `electron-updater` 需要打包产物；用 `release/win-unpacked/FrameKit.exe` 测试 |
 | macOS 构建失败 | 查看 Actions 日志；`CSC_IDENTITY_AUTO_DISCOVERY=false` 已在 workflow 中设置 |
 
 ## 7. 数据与清理

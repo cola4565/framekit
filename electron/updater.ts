@@ -1,5 +1,6 @@
-import { net } from 'electron'
-import type { UpdateCheckResult } from '../src/shared/types'
+import { app, net } from 'electron'
+import { autoUpdater } from 'electron-updater'
+import type { UpdateCheckResult, UpdateDownloadState } from '../src/shared/types'
 import { isNewerVersion, normalizeVersion } from '../src/shared/version'
 
 const RELEASE_API = 'https://api.github.com/repos/cola4565/framekit/releases/latest'
@@ -110,4 +111,120 @@ export async function checkForUpdates(
     downloadUrl: download?.browser_download_url ?? null,
     downloadName: download?.name ?? null
   }
+}
+
+let updateListener: ((state: UpdateDownloadState) => void) | null = null
+let updaterWired = false
+let installing = false
+let lastProgress = { percent: 0, transferred: 0, total: 0, bytesPerSecond: 0 }
+
+function emitUpdateState(state: UpdateDownloadState): void {
+  updateListener?.(state)
+}
+
+function readableUpdateError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error)
+  if (/app-update\.yml|Cannot find module/i.test(message)) {
+    return '缺少自动更新配置，请重新安装最新正式版后再试'
+  }
+  if (/latest(-mac)?\.yml|HTTP 404|status code 404/i.test(message)) {
+    return 'GitHub 发布页缺少更新清单，请前往发布页手动下载安装包'
+  }
+  if (/net::|ENOTFOUND|ETIMEDOUT|ECONNRESET|ECONNREFUSED|socket hang up|ERR_INTERNET/i.test(message)) {
+    return '更新包下载失败，请检查网络或代理后重试'
+  }
+  if (/code signature|signature/i.test(message)) {
+    return '安装包签名校验失败，请前往发布页手动下载'
+  }
+  return message || '更新失败，请稍后重试'
+}
+
+export function canAutoUpdate(): boolean {
+  return app.isPackaged && process.platform === 'win32'
+}
+
+export function initializeUpdater(onState: (state: UpdateDownloadState) => void): void {
+  updateListener = onState
+  if (updaterWired) return
+  updaterWired = true
+
+  autoUpdater.autoDownload = false
+  autoUpdater.autoInstallOnAppQuit = true
+  autoUpdater.allowPrerelease = false
+
+  autoUpdater.on('download-progress', (progress) => {
+    lastProgress = {
+      percent: Math.max(0, Math.min(100, Math.round(progress.percent))),
+      transferred: progress.transferred,
+      total: progress.total,
+      bytesPerSecond: progress.bytesPerSecond
+    }
+    emitUpdateState({ phase: 'downloading', ...lastProgress })
+  })
+
+  autoUpdater.on('update-downloaded', () => {
+    emitUpdateState({
+      phase: 'downloaded',
+      percent: 100,
+      transferred: lastProgress.total || lastProgress.transferred,
+      total: lastProgress.total,
+      bytesPerSecond: 0
+    })
+  })
+
+  autoUpdater.on('error', (error) => {
+    emitUpdateState({
+      phase: 'error',
+      ...lastProgress,
+      message: readableUpdateError(error)
+    })
+  })
+}
+
+export async function downloadUpdate(): Promise<void> {
+  if (!canAutoUpdate()) {
+    throw new Error(
+      process.platform === 'darwin'
+        ? 'macOS 自动安装需要 Apple 开发者签名，当前请下载 DMG 覆盖安装'
+        : '开发模式或当前平台不支持应用内自动更新，请使用打包后的安装版'
+    )
+  }
+
+  installing = false
+  lastProgress = { percent: 0, transferred: 0, total: 0, bytesPerSecond: 0 }
+  emitUpdateState({ phase: 'downloading', ...lastProgress })
+
+  try {
+    const result = await autoUpdater.checkForUpdates()
+    const latestVersion = result?.updateInfo.version
+    if (!latestVersion) throw new Error('没有可用的更新信息')
+    if (!isNewerVersion(latestVersion, app.getVersion())) {
+      throw new Error('当前已是最新版本')
+    }
+    await autoUpdater.downloadUpdate()
+  } catch (error) {
+    const message = readableUpdateError(error)
+    emitUpdateState({ phase: 'error', ...lastProgress, message })
+    throw new Error(message)
+  }
+}
+
+export async function installUpdate(): Promise<void> {
+  if (!canAutoUpdate()) {
+    throw new Error('当前版本不支持应用内安装更新')
+  }
+  if (installing) return
+  installing = true
+
+  await new Promise<void>((resolve, reject) => {
+    setImmediate(() => {
+      try {
+        autoUpdater.quitAndInstall(true, true)
+        resolve()
+      } catch (error) {
+        installing = false
+        reject(new Error(readableUpdateError(error)))
+      }
+    })
+  })
 }

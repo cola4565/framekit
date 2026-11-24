@@ -121,6 +121,16 @@ export interface UpdateCheckResult {
   hasUpdate: boolean
   downloadUrl: string | null
   downloadName: string | null
+  canAutoUpdate?: boolean
+}
+
+export interface UpdateDownloadState {
+  phase: 'downloading' | 'downloaded' | 'error'
+  percent: number
+  transferred: number
+  total: number
+  bytesPerSecond: number
+  message?: string
 }
 
 export type WindowCloseAction = 'minimize' | 'quit'
@@ -131,6 +141,9 @@ export interface FramekitApi {
   respondToClose?: (action: WindowCloseAction) => Promise<boolean>
   onCloseRequest?: (callback: () => void) => () => void
   checkForUpdates: () => Promise<UpdateCheckResult>
+  downloadUpdate?: () => Promise<void>
+  installUpdate?: () => Promise<void>
+  onUpdateProgress?: (callback: (state: UpdateDownloadState) => void) => () => void
   getBilibiliAuthStatus: () => Promise<boolean>
   loginBilibili: () => Promise<boolean>
   getAigeiAuthStatus: () => Promise<boolean>

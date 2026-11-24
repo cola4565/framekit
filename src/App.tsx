@@ -33,7 +33,8 @@ import type {
   ParseProgress,
   ParseResult,
   ResourceKind,
-  UpdateCheckResult
+  UpdateCheckResult,
+  UpdateDownloadState
 } from './shared/types'
 import {
   formatBytes,
@@ -102,6 +103,7 @@ export default function App(): React.JSX.Element {
   const [updateChecking, setUpdateChecking] = useState(false)
   const [updateResult, setUpdateResult] = useState<UpdateCheckResult | null>(null)
   const [updateError, setUpdateError] = useState<string | null>(null)
+  const [updateDownload, setUpdateDownload] = useState<UpdateDownloadState | null>(null)
   const [bilibiliLoggedIn, setBilibiliLoggedIn] = useState(false)
   const [bilibiliLoginBusy, setBilibiliLoginBusy] = useState(false)
   const [aigeiLoggedIn, setAigeiLoggedIn] = useState(false)
@@ -250,6 +252,19 @@ export default function App(): React.JSX.Element {
   }, [])
 
   useEffect(() => {
+    const subscribe = window.framekit.onUpdateProgress
+    if (typeof subscribe !== 'function') return
+    return subscribe((state) => {
+      setUpdateDownload(state)
+      if (state.phase === 'downloaded') {
+        notify('更新包已下载完成，重启应用即可完成安装', 'success')
+      } else if (state.phase === 'error') {
+        notify(state.message || '更新下载失败', 'error')
+      }
+    })
+  }, [notify])
+
+  useEffect(() => {
     const onCloseRequest = window.framekit.onCloseRequest
     if (typeof onCloseRequest !== 'function') return
     return onCloseRequest(() => setClosePromptOpen(true))
@@ -373,6 +388,7 @@ export default function App(): React.JSX.Element {
     setUpdateOpen(true)
     setUpdateChecking(true)
     setUpdateError(null)
+    setUpdateDownload((current) => (current?.phase === 'error' ? null : current))
     try {
       const info = await window.framekit.checkForUpdates()
       setUpdateResult(info)
@@ -382,6 +398,48 @@ export default function App(): React.JSX.Element {
       setUpdateError(errorMessage(checkError))
     } finally {
       setUpdateChecking(false)
+    }
+  }, [notify])
+
+  const handleStartUpdate = useCallback(async (): Promise<void> => {
+    const downloadUpdate = window.framekit.downloadUpdate
+    if (typeof downloadUpdate !== 'function') {
+      notify('请重启 FrameKit 后再更新', 'error')
+      return
+    }
+    setUpdateDownload({
+      phase: 'downloading',
+      percent: 0,
+      transferred: 0,
+      total: 0,
+      bytesPerSecond: 0
+    })
+    try {
+      await downloadUpdate.call(window.framekit)
+    } catch (downloadError) {
+      const message = errorMessage(downloadError)
+      setUpdateDownload({
+        phase: 'error',
+        percent: 0,
+        transferred: 0,
+        total: 0,
+        bytesPerSecond: 0,
+        message
+      })
+      notify(message, 'error')
+    }
+  }, [notify])
+
+  const handleInstallUpdate = useCallback(async (): Promise<void> => {
+    const installUpdate = window.framekit.installUpdate
+    if (typeof installUpdate !== 'function') {
+      notify('请重启 FrameKit 后再安装更新', 'error')
+      return
+    }
+    try {
+      await installUpdate.call(window.framekit)
+    } catch (installError) {
+      notify(errorMessage(installError), 'error')
     }
   }, [notify])
 
@@ -599,6 +657,14 @@ export default function App(): React.JSX.Element {
     : []
 
   const downloadMenuLabel = activeDownloads > 0 ? `${activeDownloads} 个下载中` : '下载队列'
+  const updateLabel =
+    updateDownload?.phase === 'downloaded'
+      ? '重启安装更新'
+      : updateDownload?.phase === 'downloading'
+        ? `更新中 ${updateDownload.percent}%`
+        : updateResult?.hasUpdate
+          ? `v${updateResult.latestVersion} 可用`
+          : '检查更新'
   const platformClass = `platform-${window.framekit.platform}`
 
   return (
@@ -623,14 +689,21 @@ export default function App(): React.JSX.Element {
         <div className="appbar-actions">
           <button
             type="button"
-            className={`appbar-button update-check-button${updateResult?.hasUpdate ? ' has-update' : ''}`}
+            className={`appbar-button update-check-button${
+              updateResult?.hasUpdate ||
+              updateDownload?.phase === 'downloading' ||
+              updateDownload?.phase === 'downloaded'
+                ? ' has-update'
+                : ''
+            }`}
             onClick={() => void handleCheckUpdates()}
             title="检查 GitHub 上的最新正式版"
           >
-            <RefreshCw size={15} className={updateChecking ? 'spin' : ''} />
-            <span>
-              {updateResult?.hasUpdate ? `v${updateResult.latestVersion} 可用` : '检查更新'}
-            </span>
+            <RefreshCw
+              size={15}
+              className={updateChecking || updateDownload?.phase === 'downloading' ? 'spin' : ''}
+            />
+            <span>{updateLabel}</span>
           </button>
           <button
             type="button"
@@ -1154,9 +1227,12 @@ export default function App(): React.JSX.Element {
           result={updateResult}
           checking={updateChecking}
           error={updateError}
+          downloadState={updateDownload}
           onClose={() => setUpdateOpen(false)}
           onRetry={() => void handleCheckUpdates()}
-          onDownload={(targetUrl) => {
+          onStartUpdate={() => void handleStartUpdate()}
+          onInstall={() => void handleInstallUpdate()}
+          onDownloadInstaller={(targetUrl) => {
             void openExternal(targetUrl)
             notify('安装包下载已在浏览器中打开', 'success')
           }}

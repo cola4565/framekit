@@ -4,7 +4,7 @@
 
 支持 Windows 与 macOS，基于 Electron + React + TypeScript 构建，解析与下载全部在本机完成。
 
-当前正式版：**v1.2.0**
+当前正式版：**v1.3.0**
 
 ![FrameKit 素材解析界面](docs/screenshot-results.png)
 
@@ -12,12 +12,12 @@
 
 ## 下载
 
-- [FrameKit 1.2.0 · Windows x64 安装包](https://github.com/cola4565/framekit/releases/download/v1.2.0/FrameKit-1.2.0-Windows-x64.exe)
-- [FrameKit 1.2.0 · macOS Apple Silicon](https://github.com/cola4565/framekit/releases/download/v1.2.0/FrameKit-1.2.0-macOS-arm64.dmg)
-- [FrameKit 1.2.0 · macOS Intel](https://github.com/cola4565/framekit/releases/download/v1.2.0/FrameKit-1.2.0-macOS-x64.dmg)
+- [FrameKit 1.3.0 · Windows x64 安装包](https://github.com/cola4565/framekit/releases/download/v1.3.0/FrameKit-1.3.0-Windows-x64.exe)
+- [FrameKit 1.3.0 · macOS Apple Silicon](https://github.com/cola4565/framekit/releases/download/v1.3.0/FrameKit-1.3.0-macOS-arm64.dmg)
+- [FrameKit 1.3.0 · macOS Intel](https://github.com/cola4565/framekit/releases/download/v1.3.0/FrameKit-1.3.0-macOS-x64.dmg)
 - [全部版本与更新说明](https://github.com/cola4565/framekit/releases)
 
-安装包暂未配置商业代码签名证书，首次运行时系统可能提示未知开发者。
+Windows 安装包为当前用户安装，之后可直接在应用内静默更新。从 1.2.0 及更早版本升级到 1.3.0 需要手动安装一次。macOS 安装包暂未配置 Apple 开发者签名与公证，首次运行时系统可能提示未知开发者；macOS 的应用内静默安装也要等签名配置完成后启用。
 
 ## 当前能力
 
@@ -30,7 +30,7 @@
 - **Bilibili 专用解析**：读取账号可用的清晰度列表（含大会员 4K/1080P+ 等），分别下载独立视频流与音频流，并用内置 ffmpeg 自动合并为标准 MP4。
 - **抖音专用解析**：捕获 DASH（Dynamic Adaptive Streaming over HTTP，动态自适应流媒体）视频流与独立音频流，按会话参数配对后用内置 ffmpeg 自动合并为标准 MP4；需要登录时可在应用内完成抖音登录。
 - **爱给网专用解析**：搜索页读取公开低清预览；条目页通过站点正常登录流程读取 1080P/720P 等下载规格。未登录或权限不足时只保留公开预览，不绕过登录、验证码、会员或付费限制。
-- **应用内更新检查**：右上角“检查更新”读取 GitHub 最新正式版，比较版本并直达对应平台的安装包。
+- **应用内静默更新**：右上角“检查更新”读取 GitHub 最新正式版；Windows 版点击“立即更新”后在后台下载，完成后一键重启安装，不弹出安装向导、不询问安装位置。
 - **后台运行**：关闭窗口时选择最小化到系统托盘 / 菜单栏，下载任务继续执行；托盘右键可直接退出。
 - **跨平台打包**：Windows NSIS（Nullsoft Scriptable Install System，安装包制作系统）安装包与 macOS DMG（Apple Disk Image，苹果磁盘映像）配置；应用图标已生成。
 - **轻量构建与清理**：构建前自动删除旧 `out/`、`release/`；运行时只清理 Electron 缓存目录，保留 Cookie、Local Storage（本地存储）、下载历史和用户素材。
@@ -44,7 +44,7 @@
 3. 默认使用“快速扫描”；如果页面由 JavaScript 动态加载，切换到“深度嗅探”。
 4. 在结果中筛选、预览、勾选素材，然后下载。
 5. 下载进度和文件位置在右上角“下载队列”中查看。
-6. 点击右上角“检查更新”，可查看 GitHub 上的最新正式版与更新说明。
+6. 点击右上角“检查更新”，可查看 GitHub 上的最新正式版；Windows 版点击“立即更新”会在后台下载并静默安装，不弹出安装向导。
 
 ### Bilibili 说明
 

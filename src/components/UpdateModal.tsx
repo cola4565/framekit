@@ -6,19 +6,24 @@ import {
   ExternalLink,
   Loader2,
   RefreshCw,
+  RotateCw,
   Sparkles,
   X
 } from 'lucide-react'
-import type { UpdateCheckResult } from '../shared/types'
+import type { UpdateCheckResult, UpdateDownloadState } from '../shared/types'
+import { formatBytes, formatSpeed } from '../shared/format'
 
 interface UpdateModalProps {
   currentVersion: string
   result: UpdateCheckResult | null
   checking: boolean
   error: string | null
+  downloadState: UpdateDownloadState | null
   onClose: () => void
   onRetry: () => void
-  onDownload: (url: string) => void
+  onStartUpdate: () => void
+  onInstall: () => void
+  onDownloadInstaller: (url: string) => void
   onOpenRelease: (url: string) => void
 }
 
@@ -44,9 +49,12 @@ export default function UpdateModal({
   result,
   checking,
   error,
+  downloadState,
   onClose,
   onRetry,
-  onDownload,
+  onStartUpdate,
+  onInstall,
+  onDownloadInstaller,
   onOpenRelease
 }: UpdateModalProps): React.JSX.Element {
   useEffect(() => {
@@ -63,6 +71,13 @@ export default function UpdateModal({
 
   const hasUpdate = Boolean(result?.hasUpdate)
   const published = result ? releaseDate(result.publishedAt) : ''
+  const canAutoUpdate = Boolean(result?.canAutoUpdate)
+  const phase = downloadState?.phase ?? null
+  const busy = phase === 'downloading'
+  const ready = phase === 'downloaded'
+  const failed = phase === 'error'
+  const percent = Math.max(0, Math.min(100, downloadState?.percent ?? 0))
+  const manualOnly = hasUpdate && !canAutoUpdate
 
   return (
     <div className="modal-backdrop update-backdrop" role="presentation" onMouseDown={onClose}>
@@ -76,7 +91,7 @@ export default function UpdateModal({
         <header className="update-header">
           <div className="update-heading">
             <span className={`update-mark${hasUpdate ? ' has-update' : ''}`}>
-              <RefreshCw size={19} className={checking ? 'spin' : ''} />
+              <RefreshCw size={19} className={checking || busy ? 'spin' : ''} />
             </span>
             <div>
               <span className="update-kicker">RELEASE CHANNEL / STABLE</span>
@@ -146,6 +161,59 @@ export default function UpdateModal({
                 <span>更新说明</span>
                 <div>{result.releaseNotes || '本次正式版暂未提供详细更新说明。'}</div>
               </div>
+              {manualOnly && (
+                <p className="update-manual-hint">
+                  {window.framekit.platform === 'darwin'
+                    ? 'macOS 应用内静默安装需要 Apple 开发者签名与公证；当前请下载 DMG 覆盖安装。'
+                    : '当前构建暂不支持应用内安装，请下载安装包。安装此版本后，后续更新将自动静默完成。'}
+                </p>
+              )}
+            </div>
+          )}
+
+          {!checking && !error && hasUpdate && canAutoUpdate && downloadState && (
+            <div className={`update-progress is-${downloadState.phase}`} aria-live="polite">
+              {busy && (
+                <>
+                  <div className="update-progress-head">
+                    <span>
+                      <ArrowDownToLine size={13} />
+                      正在后台下载更新包
+                    </span>
+                    <strong>{percent}%</strong>
+                  </div>
+                  <div className="update-progress-track">
+                    <i style={{ width: `${percent}%` }} />
+                  </div>
+                  <small>
+                    {formatBytes(downloadState.transferred)} / {formatBytes(downloadState.total)}
+                    {formatSpeed(downloadState.bytesPerSecond)
+                      ? ` · ${formatSpeed(downloadState.bytesPerSecond)}`
+                      : ''}
+                  </small>
+                  <p>下载完成后点击“重启并安装”即可，安装过程不会打开向导，也不需要选择安装位置。</p>
+                </>
+              )}
+
+              {ready && (
+                <div className="update-ready-row">
+                  <CircleCheck size={20} />
+                  <div>
+                    <strong>更新包已就绪</strong>
+                    <span>点击“重启并安装”，FrameKit 会自动完成安装并重新启动。</span>
+                  </div>
+                </div>
+              )}
+
+              {failed && (
+                <div className="update-ready-row is-error">
+                  <AlertCircle size={20} />
+                  <div>
+                    <strong>更新下载失败</strong>
+                    <span>{downloadState.message || '请检查网络后重试。'}</span>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -163,17 +231,34 @@ export default function UpdateModal({
                 发布页
               </button>
             )}
-            {!checking && (
+            {!checking && !busy && (
               <button type="button" className="button ghost" onClick={onRetry}>
                 <RefreshCw size={14} />
                 重新检查
               </button>
             )}
-            {result && hasUpdate && result.downloadUrl ? (
+            {!checking && hasUpdate && canAutoUpdate ? (
+              ready ? (
+                <button type="button" className="button primary" onClick={onInstall}>
+                  <RotateCw size={15} />
+                  重启并安装
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="button primary"
+                  onClick={onStartUpdate}
+                  disabled={busy}
+                >
+                  {busy ? <Loader2 size={15} className="spin" /> : <ArrowDownToLine size={15} />}
+                  {busy ? `正在下载 ${percent}%` : failed ? '重试更新' : '立即更新'}
+                </button>
+              )
+            ) : manualOnly && result?.downloadUrl ? (
               <button
                 type="button"
                 className="button primary"
-                onClick={() => onDownload(result.downloadUrl as string)}
+                onClick={() => onDownloadInstaller(result.downloadUrl as string)}
               >
                 <ArrowDownToLine size={15} />
                 下载 {packageLabel()}
