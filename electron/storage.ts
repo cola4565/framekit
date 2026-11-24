@@ -32,6 +32,28 @@ let legacyUserData = ''
 let legacyLocalData = ''
 let legacyUpdaterData = ''
 
+/**
+ * 数据根目录。Windows 打包版位于安装盘下（如 `D:\FrameKitData`），
+ * macOS / 开发版沿用 Electron 默认的 userData。
+ */
+export function getDataRoot(): string {
+  return dataRoot
+}
+
+/**
+ * 子进程环境变量。
+ *
+ * 这里只覆盖 TEMP/TMP，让 ffmpeg 的临时文件留在数据目录里，
+ * 避免写到 C 盘。刻意不改写 LOCALAPPDATA / APPDATA：
+ * 那两个变量会被 `shell.openExternal` 启动的默认浏览器继承，
+ * 导致系统浏览器的用户配置目录被重建到 FrameKit 数据目录里
+ * （表现为数据目录里多出几百 MB 的 `Microsoft/Edge`）。
+ */
+export function buildChildEnv(): NodeJS.ProcessEnv {
+  const temp = app.getPath('temp')
+  return { ...process.env, TEMP: temp, TMP: temp }
+}
+
 function samePath(left: string, right: string): boolean {
   return resolve(left).toLowerCase() === resolve(right).toLowerCase()
 }
@@ -101,11 +123,6 @@ function initializeDirectories(userData: string): void {
   app.setPath('logs', paths.logs)
   app.setPath('crashDumps', paths.crashDumps)
   app.setPath('temp', paths.temp)
-
-  process.env.LOCALAPPDATA = paths.local
-  process.env.APPDATA = paths.roaming
-  process.env.TEMP = paths.temp
-  process.env.TMP = paths.temp
 }
 
 export function prepareStorage(): string {

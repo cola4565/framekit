@@ -11,6 +11,7 @@ import type {
   StartDownloadsResult
 } from '../src/shared/types'
 import { sanitizeFilename } from './extractor'
+import { buildChildEnv } from './storage'
 
 const CONCURRENCY = 3
 const USER_AGENT =
@@ -202,7 +203,8 @@ function runFfmpeg(args: string[], signal: AbortSignal): Promise<void> {
     const child = spawn(FFMPEG_PATH, args, {
       windowsHide: true,
       signal,
-      stdio: ['ignore', 'ignore', 'pipe']
+      stdio: ['ignore', 'ignore', 'pipe'],
+      env: buildChildEnv()
     })
     let stderr = ''
     child.stderr.on('data', (chunk: Buffer) => {

@@ -8,6 +8,7 @@ import ffmpegStatic from 'ffmpeg-static'
 import { getAigeiCookieHeader } from './aigei'
 import { getBilibiliCookieHeader } from './bilibili'
 import { getDouyinCookieHeader } from './douyin'
+import { buildChildEnv } from './storage'
 import { getWeiboCookieHeader } from './weibo'
 
 export const THUMBNAIL_SCHEME = 'framekit-thumb'
@@ -156,7 +157,8 @@ function runFfmpeg(args: string[]): Promise<void> {
   return new Promise<void>((resolveRun, rejectRun) => {
     const child = spawn(FFMPEG_PATH, args, {
       windowsHide: true,
-      stdio: ['ignore', 'ignore', 'pipe']
+      stdio: ['ignore', 'ignore', 'pipe'],
+      env: buildChildEnv()
     })
     let stderr = ''
     child.stderr.on('data', (chunk: Buffer) => {

@@ -1,7 +1,9 @@
 import { app, net, session } from 'electron'
 import { autoUpdater } from 'electron-updater'
+import { join } from 'node:path'
 import type { UpdateCheckResult, UpdateDownloadState } from '../src/shared/types'
 import { isNewerVersion, normalizeVersion } from '../src/shared/version'
+import { getDataRoot } from './storage'
 import {
   applyMirror,
   fetchLatestTag,
@@ -16,6 +18,33 @@ import { getUpdateSettings } from './update-settings'
 const RELEASE_API = 'https://api.github.com/repos/cola4565/framekit/releases/latest'
 const RELEASE_PAGE = 'https://github.com/cola4565/framekit/releases/latest'
 const RELEASE_TAG_PAGE = 'https://github.com/cola4565/framekit/releases/tag'
+
+/**
+ * 更新器缓存根目录。
+ *
+ * electron-updater 默认从 `process.env.LOCALAPPDATA` 推导缓存路径，
+ * 但我们不再改写该环境变量（否则默认浏览器会把自己的用户配置目录
+ * 写进 FrameKit 数据目录）。这里显式给出数据根目录下的缓存位置。
+ */
+function updaterCachePath(): string {
+  const root = getDataRoot()
+  return root ? join(root, 'local') : app.getPath('userData')
+}
+
+/**
+ * 把更新器缓存目录指到 FrameKit 数据目录。
+ *
+ * 只覆盖实例上的 `baseCachePath` 读取，不替换整个适配器：
+ * 替换适配器会让 electron-updater 丢掉内置的 HTTP 客户端，下载会失败。
+ */
+function redirectUpdaterCachePath(): void {
+  const adapter = (autoUpdater as unknown as { app?: object }).app
+  if (!adapter) return
+  Object.defineProperty(adapter, 'baseCachePath', {
+    configurable: true,
+    get: () => updaterCachePath()
+  })
+}
 
 interface GithubReleaseAsset {
   name: string
@@ -385,6 +414,7 @@ export function initializeUpdater(onState: (state: UpdateDownloadState) => void)
   if (updaterWired) return
   updaterWired = true
 
+  redirectUpdaterCachePath()
   autoUpdater.autoDownload = false
   autoUpdater.autoInstallOnAppQuit = true
   autoUpdater.allowPrerelease = false

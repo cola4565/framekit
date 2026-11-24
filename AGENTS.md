@@ -1,6 +1,6 @@
 # FrameKit 项目基线
 
-面向视频剪辑 / 后期工作者的跨平台桌面工具箱。当前只有一个模块：**网页素材解析器**（图片、音频、视频、字幕、其他文件）。仓库：`cola4565/framekit`，当前版本 **1.3.5**，已发布 Windows NSIS 安装包与 macOS DMG（arm64 / x64）。
+面向视频剪辑 / 后期工作者的跨平台桌面工具箱。当前只有一个模块：**网页素材解析器**（图片、音频、视频、字幕、其他文件）。仓库：`cola4565/framekit`，当前版本 **1.3.6**，已发布 Windows NSIS 安装包与 macOS DMG（arm64 / x64）。
 
 ## 技术栈
 
@@ -83,6 +83,7 @@ npm run typecheck
 npm run test:parser    # 静态解析
 npm run test:download  # 普通下载
 npm run test:update    # 版本比较
+npm run test:storage   # 数据目录 / 环境变量回归
 npm run test:deep      # 深度嗅探（需要 Electron）
 npm run test:ui        # 需要先 npm run demo + npm run dev
 npm run test:bilibili  # 真实 Bilibili 解析 + 下载 + 合并校验（需要网络/可能需登录）
@@ -95,6 +96,7 @@ UI 冒烟需要两个后台进程：`npm run demo`（127.0.0.1:8787）与 `FRAME
 - Windows 打包版数据根目录：安装盘下的 `FrameKitData`，例如装在 `D:\FrameKit` 时使用 `D:\FrameKitData`；装在 C 盘时会优先选第一个可写的非 C 盘。`FRAMEKIT_DATA_DIR` 可覆盖。
   - `data/`：Electron `userData` / `sessionData`，包含 `download-history.json`、`Partitions/bilibili|douyin|aigei|weibo/`、Local Storage、Preferences
   - `cache/`、`logs/`、`crashDumps/`、`temp/`、`local/`、`roaming/`：Chromium 缓存、日志、崩溃转储、临时文件与进程级环境目录
+  - **不要改写 `process.env.LOCALAPPDATA` / `APPDATA` / `TEMP` / `TMP`**：这些变量会被 `shell.openExternal` 启动的默认浏览器继承，导致系统浏览器把用户配置目录重建到 FrameKit 数据目录。需要重定向临时目录时用 `storage.ts` 的 `buildChildEnv()` 传给子进程；更新器缓存用 `baseCachePath` 显式指定。
   - `local/framekit-updater/`：electron-updater 下载缓存
   - `.framekit-data`：卸载器用来确认这是 FrameKit 数据目录的标记文件
 - 旧版 `%APPDATA%\framekit` 会在首次启动 1.3.2+ 时迁移到新数据根目录（跳过缓存），随后删除旧目录；`%LOCALAPPDATA%\framekit*` 旧缓存直接清理。
@@ -144,6 +146,7 @@ UI 冒烟需要两个后台进程：`npm run demo`（127.0.0.1:8787）与 `FRAME
 | 爱给网搜索结果混入大量图片 | 样式表在视频过滤后又补回图片 | 视频搜索页跳过样式表扫描，并在合并后再次过滤 |
 | 爱给网动态读取被 iframe 导航打断 | 同源空白 iframe 频繁创建 | 使用 CDP `Runtime.evaluate`，不要依赖短生命周期 `executeJavaScript` |
 | `npm run test:*` 报 `spawn EPERM` | 沙箱禁止 esbuild 子进程 | 在沙箱外运行或提权 |
+| 数据目录里多出几百 MB 的 `Microsoft/Edge` | 1.3.2 起的 `storage.ts` 全局改写了 `process.env.LOCALAPPDATA`，`shell.openExternal` 启动的默认浏览器继承后把自己的用户配置目录重建到了 FrameKit 数据目录 | 不再改写 `LOCALAPPDATA`/`APPDATA`/`TEMP`/`TMP`；ffmpeg 用 `buildChildEnv()` 显式传 TEMP，更新器缓存用 `baseCachePath` 显式指定；`npm run test:storage` 防回归 |
 | 点更新后弹 NSIS 安装向导 | 旧实现只打开安装包；或安装包改成了 assisted 但未走 `--updated /S` | 应用内 `electron-updater` + `quitAndInstall(true, true)`；首次安装才显示向导 |
 | 无法选择安装盘 | one-click 安装器固定装到 `%LOCALAPPDATA%\Programs` | `oneClick: false` + `allowToChangeInstallationDirectory: true`，并强制当前用户安装 |
 | 自动更新报缺少 `latest.yml` | 发布脚本只上传了 exe 与 blockmap | 发布资产必须包含 `latest.yml` |
