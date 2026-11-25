@@ -94,6 +94,8 @@ export interface DownloadProgress {
   status: DownloadStatus
   received: number
   total?: number
+  /** HLS 等流式任务按分片进度计算的百分比；普通下载不设置。 */
+  percent?: number
   speed: number
   error?: string
   filePath?: string

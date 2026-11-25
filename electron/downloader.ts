@@ -11,6 +11,12 @@ import type {
   StartDownloadsResult
 } from '../src/shared/types'
 import { sanitizeFilename } from './extractor'
+import {
+  bestHlsVariant,
+  isHlsUrl,
+  parseHlsMaster,
+  parseHlsMedia
+} from './hls'
 import { buildChildEnv } from './storage'
 
 const CONCURRENCY = 3
@@ -60,6 +66,7 @@ interface DownloadTask {
   finishedAt?: number
   message?: string
   phase?: 'download' | 'merge'
+  percent?: number
   tempPaths: string[]
   removed?: boolean
 }
@@ -242,6 +249,7 @@ export class DownloadManager {
       status: task.status,
       received: task.received,
       total: task.total,
+      percent: task.percent,
       speed: task.speed,
       error: task.error,
       filePath: task.filePath,
@@ -369,6 +377,11 @@ export class DownloadManager {
     task.status = 'downloading'
     task.startedAt = Date.now()
     this.emit(task)
+
+    if (isHlsUrl(task.request.url)) {
+      await this.runHls(task)
+      return
+    }
 
     if (task.request.audioUrl) {
       await this.runMerged(task)
@@ -640,6 +653,192 @@ export class DownloadManager {
       this.emit(task)
     } finally {
       this.reservedPaths.delete(finalPath.toLowerCase())
+    }
+  }
+
+  private async fetchPlaylistText(url: string, task: DownloadTask): Promise<string> {
+    const response = await fetch(url, {
+      headers: requestHeaders(url, task.request.pageUrl, undefined, task.request.cookie),
+      redirect: 'follow',
+      signal: task.controller.signal
+    })
+    if (!response.ok) {
+      await response.body?.cancel()
+      throw new Error(`HTTP ${response.status}`)
+    }
+    return response.text()
+  }
+
+  private async runHls(task: DownloadTask): Promise<void> {
+    const finalPath = availablePath(
+      task.destination,
+      ensureExtension(task.request.filename, 'video/mp4', 'video'),
+      this.reservedPaths
+    )
+    task.filePath = finalPath
+    task.filename = basename(finalPath)
+    const partPath = `${finalPath}.hls.part`
+    const mergedPath = `${finalPath}.merge-${process.pid}.mp4`
+    task.tempPaths.push(partPath, mergedPath)
+    let stream: ReturnType<typeof createWriteStream> | undefined
+
+    try {
+      if (!FFMPEG_PATH) throw new Error('未找到内置 ffmpeg，无法封装 HLS')
+
+      task.phase = 'download'
+      task.percent = 0
+      task.message = '正在读取 HLS 清单…'
+      this.emit(task)
+
+      const firstText = await this.fetchPlaylistText(task.request.url, task)
+      let mediaUrl = task.request.url
+      const variants = parseHlsMaster(firstText, task.request.url)
+      const bestVariant = bestHlsVariant(variants)
+      if (bestVariant) mediaUrl = bestVariant.url
+
+      const mediaText =
+        mediaUrl === task.request.url ? firstText : await this.fetchPlaylistText(mediaUrl, task)
+      const playlist = parseHlsMedia(mediaText, mediaUrl)
+      if (playlist.encrypted) {
+        throw new Error('该 HLS 流使用加密分片，当前版本暂不支持')
+      }
+      if (playlist.hasByteRange) {
+        throw new Error('该 HLS 清单使用分片字节范围，当前版本暂不支持')
+      }
+      if (playlist.segments.length === 0) {
+        throw new Error('HLS 清单里没有可下载的分片')
+      }
+
+      stream = createWriteStream(partPath, { flags: 'w' })
+      let completedDuration = 0
+      let lastEmit = 0
+      const totalDuration = playlist.duration
+
+      const appendUrl = async (
+        url: string,
+        duration: number,
+        message: string
+      ): Promise<void> => {
+        const response = await fetch(url, {
+          headers: requestHeaders(url, task.request.pageUrl, undefined, task.request.cookie),
+          redirect: 'follow',
+          signal: task.controller.signal
+        })
+        if (!response.ok) {
+          await response.body?.cancel()
+          throw new Error(`HTTP ${response.status}`)
+        }
+        const reader = response.body?.getReader()
+        if (!reader) throw new Error('服务器没有返回文件内容')
+
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          if (!value) continue
+          const buffer = Buffer.from(value)
+          if (!stream?.write(buffer)) {
+            await new Promise<void>((resolveDrain, rejectDrain) => {
+              const onDrain = (): void => {
+                stream?.off('error', onError)
+                resolveDrain()
+              }
+              const onError = (error: Error): void => {
+                stream?.off('drain', onDrain)
+                rejectDrain(error)
+              }
+              stream?.once('drain', onDrain)
+              stream?.once('error', onError)
+            })
+          }
+          task.received += buffer.byteLength
+        }
+
+        completedDuration += duration
+        if (totalDuration > 0) {
+          task.percent = Math.min(99, Math.round((completedDuration / totalDuration) * 100))
+        }
+        task.message = message
+        const elapsed = Math.max(0.001, (Date.now() - (task.startedAt ?? Date.now())) / 1000)
+        task.speed = task.received / elapsed
+        const now = Date.now()
+        if (now - lastEmit >= 150) {
+          lastEmit = now
+          this.emit(task)
+        }
+      }
+
+      if (playlist.initSegment) {
+        task.message = '正在下载 HLS 初始化分片…'
+        this.emit(task)
+        await appendUrl(playlist.initSegment, 0, task.message)
+      }
+
+      for (let index = 0; index < playlist.segments.length; index += 1) {
+        const segment = playlist.segments[index]
+        await appendUrl(
+          segment.url,
+          segment.duration,
+          `正在下载 HLS 分片 ${index + 1}/${playlist.segments.length}`
+        )
+      }
+
+      await new Promise<void>((resolveEnd, rejectEnd) => {
+        stream?.once('error', rejectEnd)
+        stream?.end(resolveEnd)
+      })
+      stream = undefined
+
+      task.phase = 'merge'
+      task.percent = 99
+      task.speed = 0
+      task.message = '正在封装 MP4…'
+      this.emit(task)
+
+      await runFfmpeg(
+        [
+          '-hide_banner',
+          '-loglevel',
+          'error',
+          '-y',
+          '-i',
+          partPath,
+          '-c',
+          'copy',
+          '-movflags',
+          '+faststart',
+          mergedPath
+        ],
+        task.controller.signal
+      )
+
+      const merged = await stat(mergedPath)
+      await unlink(partPath).catch(() => undefined)
+      await rename(mergedPath, finalPath)
+      if (task.removed) {
+        await unlink(finalPath).catch(() => undefined)
+        return
+      }
+      task.received = merged.size
+      task.total = merged.size
+      task.percent = 100
+      task.status = 'done'
+      task.speed = 0
+      task.finishedAt = Date.now()
+      task.message = 'HLS 已封装为 MP4'
+      this.emit(task)
+    } catch (error) {
+      stream?.destroy()
+      await unlink(partPath).catch(() => undefined)
+      await unlink(mergedPath).catch(() => undefined)
+      task.status = task.controller.signal.aborted ? 'canceled' : 'error'
+      task.speed = 0
+      task.percent = undefined
+      task.message = undefined
+      task.error = friendlyError(error)
+      task.finishedAt = Date.now()
+      this.emit(task)
+    } finally {
+      if (task.filePath) this.reservedPaths.delete(task.filePath.toLowerCase())
     }
   }
 }

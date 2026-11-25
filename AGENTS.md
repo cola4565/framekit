@@ -1,6 +1,6 @@
 # FrameKit 项目基线
 
-面向视频剪辑 / 后期工作者的跨平台桌面工具箱。当前只有一个模块：**网页素材解析器**（图片、音频、视频、字幕、其他文件）。仓库：`cola4565/framekit`，当前版本 **1.3.6**，已发布 Windows NSIS 安装包与 macOS DMG（arm64 / x64）。
+面向视频剪辑 / 后期工作者的跨平台桌面工具箱。当前只有一个模块：**网页素材解析器**（图片、音频、视频、字幕、其他文件）。仓库：`cola4565/framekit`，当前版本 **1.3.7**，已发布 Windows NSIS 安装包与 macOS DMG（arm64 / x64）。
 
 ## 技术栈
 
@@ -27,7 +27,9 @@ electron/
   douyin.ts            抖音持久会话、登录、DASH 流捕获与音视频配对
   aigei.ts             爱给网持久会话、登录、下载规格读取与正常下载入口
   weibo.ts             微博视频解析（mid 提取、访客身份、移动端接口直取 + 浏览器兜底）
-  downloader.ts        下载队列：并发 3、Range/Referer/Cookie、DASH 合并、取消、删除
+  cctv.ts              央视网点播解析（页面编号、播放接口、HLS 清晰度）
+  hls.ts               HLS 清单解析（master / media playlist、分片与清晰度）
+  downloader.ts        下载队列：并发 3、Range/Referer/Cookie、DASH 合并、HLS 分片封装、取消、删除
   download-history.ts  下载记录持久化（最多 200 条）
   media-protocol.ts    framekit-media:// 预览代理（补请求头、转发 Range）
   thumbnail.ts        framekit-thumb:// 视频封面抽帧（ffmpeg 首帧 + 浏览器回退）
@@ -57,6 +59,9 @@ scripts/               冒烟测试、演示服务器、构建清理
 - **微博视频靠 mid 解析，不靠嗅探**：微博未登录时先跳 `passport.weibo.com/visitor/visitor` 算设备指纹，静态扫描只能拿到 9KB 的访客系统页。正确做法是从地址里取出 mid —— `tv/show/<oid>:<mid>` 路径里的、或个人主页 `?layerid=<mid>` 的（layerid 就是被点开那条视频的 mid）—— 再用 `m.weibo.cn/statuses/show?id=<mid>` 取 `page_info.media_info.stream_url`。接口通常 1 秒内返回，浏览器嗅探要 7 秒以上且常失败。
 - **微博接口的字段形态**：`page_info.page_pic` 是 `{ url, width, height }` 对象不是字符串；`media_info` 只有 `stream_url` / `stream_url_hd` / `duration` 三个字段；接口要用手机 UA（iPhone）才直接响应，否则要先拿访客 Cookie。`Session.fetch` 的 `json()` 不可靠，统一用 `text()` 再 `JSON.parse`。
 - **微博访客身份**：`persist:weibo` 保存 SUB Cookie。`ensureVisitorIdentity()` 访问一次 `m.weibo.cn` 就能拿到，之后接口与页面都能用，不必每次重算指纹。
+- **央视网点播已改成 HLS**：页面里 `video.chapters[].url` 可能全是空串，只有 `hls_url` 有效。`electron/cctv.ts` 先从页面取 `guid` / `parentGuid`，再查 `api.cntv.cn/video/videoinfoByGuid` 与 `vdn.apps.cntv.cn/api/getHttpVideoInfo.do?pid=...`，最后读 master playlist 列出清晰度。不要只靠静态扫描找 MP4。
+- **HLS 下载**：`.m3u8` 资源走 `downloader.ts` 的 `runHls()`：顺序拉取 TS / fMP4 分片写入单个临时文件，再用 ffmpeg `-c copy` 封装为 MP4，音轨随分片一起保留。进度按已完成分片时长计算（`DownloadProgress.percent`），不要用 `content-length` 推断。加密 HLS（AES-128）与 `EXT-X-BYTERANGE` 分片会明确报不支持。
+- **HLS 是“不可直接播放但可下载”**：资源保持 `isStream: true`，`src/shared/media.ts` 的 `isHlsResource()` 负责放行下载；`App.tsx` 的批量过滤、`ResourceCard` 与 `PreviewModal` 的下载按钮都要用它判断，DASH `.mpd` 仍然禁用下载。预览显示封面，不要尝试把 m3u8 直接塞给 `<video>`。
 - **专用解析的判断要看原始地址**：`parsePage` 里微博的判断必须用 `pageUrl`（用户输入的原始地址），不能用静态扫描的 `finalUrl`——微博会把它改成 `passport.weibo.com`，导致适配器根本不触发。
 - **webRequest 监听必须回调**：Electron 的 `webRequest.onBeforeRequest` 监听器必须调用 `callback({})`，否则会挂起页面请求。爱给网曾因漏掉回调导致下载按钮和预览全部读不到。
 - **预览代理**：`framekit-media://media/?url=...&referer=...`。新增 scheme 时记得同步 `index.html` 的 CSP（`img-src` / `media-src` 已包含 `framekit-media:`）。
@@ -84,6 +89,7 @@ npm run test:parser    # 静态解析
 npm run test:download  # 普通下载
 npm run test:update    # 版本比较
 npm run test:storage   # 数据目录 / 环境变量回归
+npm run test:cctv      # 央视网地址识别与 HLS 清单解析
 npm run test:deep      # 深度嗅探（需要 Electron）
 npm run test:ui        # 需要先 npm run demo + npm run dev
 npm run test:bilibili  # 真实 Bilibili 解析 + 下载 + 合并校验（需要网络/可能需登录）
@@ -159,11 +165,14 @@ UI 冒烟需要两个后台进程：`npm run demo`（127.0.0.1:8787）与 `FRAME
 | 微博个人主页地址解析不出视频 | `layerid` 被页面丢弃，且列表是 SPA 懒加载，嗅探抓不到 | 从地址取 `layerid` 作为 mid，走移动端接口直取播放地址 |
 | 微博接口报 `data argument must be of type string` | `page_info.page_pic` 是对象被当成字符串传给了 `makeResource` | 用 `extractPosterUrl()` 兼容对象与字符串两种形态 |
 | 微博接口拿不到某条 mid | 该条在移动端接口不可见 | 回退内置浏览器嗅探 `tv/show` 页的真实网络请求 |
+| 央视网点播页解析不到视频 | 页面只给 `hls_url`，`video.chapters[].url` 是空串 | 走 `electron/cctv.ts`：guid → videoinfoByGuid → getHttpVideoInfo → master m3u8 |
+| HLS 下载后没有声音或文件损坏 | 只保存了 m3u8，或分片顺序 / 封装方式不对 | 按清单顺序拼接分片，再用 ffmpeg `-c copy -movflags +faststart` 封装 MP4 |
+| HLS 队列进度一直不动 | 分片响应没有 `content-length` | 使用已完成分片时长 / 清单总时长计算 `DownloadProgress.percent` |
 
 ## 边界与后续方向
 
 - 不做 DRM 解密、不绕过付费墙；仅用于下载用户有权保存的内容。
-- HLS（`.m3u8`）目前只识别清单，分片下载与合并未实现。
+- HLS（`.m3u8`）已支持未加密分片的下载与 MP4 封装；AES-128 加密、`EXT-X-BYTERANGE` 与独立音频 rendition 仍未实现。
 - YouTube 等站点没有专用适配器。
 - 爱给网官方 API 使用独立 API Key、额度与授权范围，不等于网页全部资源；详见 `docs/PLATFORM-NOTES.md`。
 - 安装包未做商业代码签名/公证，SmartScreen / Gatekeeper 会提示未知开发者；macOS 静默更新要等签名与公证完成后再开启。

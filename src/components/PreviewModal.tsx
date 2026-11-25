@@ -8,7 +8,7 @@ import {
 } from 'lucide-react'
 import type { MediaResource } from '../shared/types'
 import { formatBytes, formatDuration, kindMeta, sourceMeta } from '../shared/format'
-import { toPreviewUrl, toThumbnailUrl } from '../shared/media'
+import { isHlsResource, toPreviewUrl, toThumbnailUrl } from '../shared/media'
 
 interface PreviewModalProps {
   resource: MediaResource
@@ -31,6 +31,7 @@ export default function PreviewModal({
   const audioRef = useRef<HTMLAudioElement>(null)
   const [mediaError, setMediaError] = useState(false)
   const playback = playbackResource ?? resource
+  const hls = isHlsResource(resource)
 
   const videoSrc = useMemo(
     () => toPreviewUrl(playback.url, playback.pageUrl),
@@ -47,9 +48,10 @@ export default function PreviewModal({
   const coverSrc = useMemo(() => {
     if (playback.poster) return posterSrc
     if (resource.poster) return toPreviewUrl(resource.poster, resource.pageUrl)
-    if (resource.kind !== 'video' || resource.isStream) return undefined
+    if (resource.kind !== 'video' || (resource.isStream && !hls)) return undefined
     return toThumbnailUrl(resource.url, resource.pageUrl)
   }, [
+    hls,
     playback.poster,
     posterSrc,
     resource.isStream,
@@ -215,12 +217,32 @@ export default function PreviewModal({
             </div>
           )}
           {(resource.isStream || resource.kind === 'other') && (
-            <div className="preview-fallback">
-              <FileText size={48} strokeWidth={1.2} />
-              <h3>{resource.isStream ? '这是流媒体清单，不是完整成片' : '此类型没有内置预览'}</h3>
+            <div
+              className={`preview-fallback${hls && coverSrc && !coverFailed ? ' preview-fallback-cover' : ''}`}
+            >
+              {hls && coverSrc && !coverFailed ? (
+                <img
+                  className="preview-cover"
+                  src={coverSrc}
+                  alt="视频封面"
+                  referrerPolicy="no-referrer"
+                  onError={() => setCoverFailed(true)}
+                />
+              ) : (
+                <FileText size={48} strokeWidth={1.2} />
+              )}
+              <h3>
+                {hls
+                  ? 'HLS 流媒体，下载后自动合并为 MP4'
+                  : resource.isStream
+                    ? '这是流媒体清单，不是完整成片'
+                    : '此类型没有内置预览'}
+              </h3>
               <p>
-                {resource.isStream
-                  ? 'HLS / DASH 需要下载分片并重新封装。当前版本可以先复制地址，后续转码模块会支持合并。'
+                {hls
+                  ? '预览先显示视频封面。点击“下载素材”会自动抓取分片、合并音轨并封装为 MP4。'
+                  : resource.isStream
+                    ? 'DASH 清单需要专用的分片下载与重新封装，当前版本暂不支持。'
                   : '可以复制直链，或直接在系统浏览器中打开查看。'}
               </p>
             </div>
@@ -255,7 +277,7 @@ export default function PreviewModal({
             <button
               type="button"
               className="button primary"
-              disabled={resource.isStream}
+              disabled={resource.isStream && !hls}
               onClick={() => onDownload(resource)}
             >
               <Download size={15} />

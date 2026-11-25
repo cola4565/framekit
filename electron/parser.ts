@@ -15,6 +15,7 @@ import { extractBilibiliPage, isBilibiliVideoUrl } from './bilibili'
 import { extractDouyinPage, isDouyinVideoUrl } from './douyin'
 import { extractAigeiItemPage, isAigeiItemUrl } from './aigei'
 import { extractWeiboPage, isWeiboVideoUrl } from './weibo'
+import { extractCctvPage, isCctvVideoUrl } from './cctv'
 import { sniffPage } from './sniffer'
 
 type ProgressReporter = (progress: ParseProgress) => void
@@ -195,6 +196,56 @@ export async function parsePage(
       }
     } catch (error) {
       const warning = `抖音专用解析失败：${
+        error instanceof Error ? error.message : '未知错误'
+      }`
+      if (!options.deep) {
+        return {
+          ...quickResult,
+          warnings: uniqueWarnings([...quickResult.warnings, warning]),
+          elapsedMs: Date.now() - startedAt
+        }
+      }
+      quickResult = {
+        ...quickResult,
+        warnings: uniqueWarnings([...quickResult.warnings, warning])
+      }
+    }
+  }
+
+  const cctvTarget = isCctvVideoUrl(pageUrl)
+    ? pageUrl
+    : isCctvVideoUrl(quickResult.finalUrl || '')
+      ? (quickResult.finalUrl as string)
+      : null
+
+  if (cctvTarget) {
+    onProgress({
+      stage: 'browser',
+      message: '识别到央视网，正在读取 HLS 清晰度与播放信息…',
+      percent: 48
+    })
+    try {
+      const cctv = await extractCctvPage(cctvTarget, onProgress)
+      onProgress({
+        stage: 'done',
+        message: `央视网解析完成，共 ${cctv.resources.length} 个清晰度`,
+        percent: 100
+      })
+      return {
+        ...quickResult,
+        finalUrl: cctv.finalUrl || quickResult.finalUrl,
+        title: cctv.title || quickResult.title,
+        description: cctv.description ?? quickResult.description,
+        siteName: 'cctv.com',
+        favicon: cctv.favicon ?? quickResult.favicon,
+        mode: 'deep',
+        resources: cctv.resources,
+        stats: statsForResources(cctv.resources),
+        warnings: warningsAfterDedicatedParse([...quickResult.warnings, ...cctv.warnings]),
+        elapsedMs: Date.now() - startedAt
+      }
+    } catch (error) {
+      const warning = `央视网专用解析失败：${
         error instanceof Error ? error.message : '未知错误'
       }`
       if (!options.deep) {

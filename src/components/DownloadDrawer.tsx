@@ -133,7 +133,7 @@ export default function DownloadDrawer({
         ) : (
           <div className="queue-list">
             {tasks.map((task) => {
-              const percent = percentOf(task.received, task.total)
+              const percent = task.percent ?? percentOf(task.received, task.total)
               return (
                 <article
                   key={`${task.id}-${task.startedAt ?? 'queued'}`}

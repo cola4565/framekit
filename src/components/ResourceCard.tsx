@@ -17,7 +17,7 @@ import {
   kindMeta,
   sourceMeta
 } from '../shared/format'
-import { toPreviewUrl, toThumbnailUrl } from '../shared/media'
+import { isHlsResource, toPreviewUrl, toThumbnailUrl } from '../shared/media'
 
 interface ResourceCardProps {
   resource: MediaResource
@@ -49,6 +49,8 @@ export default function ResourceCard({
   const isImage = resource.kind === 'image'
   const isVideo = resource.kind === 'video'
   const isAudio = resource.kind === 'audio'
+  const hlsDownloadable = isHlsResource(resource)
+  const downloadable = !resource.isStream || hlsDownloadable
   const posterSource = isImage
     ? resource.url
     : isVideo
@@ -144,7 +146,9 @@ export default function ResourceCard({
             <Play size={20} fill="currentColor" />
           </span>
         )}
-        {resource.isStream && <span className="stream-chip">HLS / DASH</span>}
+        {resource.isStream && (
+          <span className="stream-chip">{hlsDownloadable ? 'HLS · 自动合并' : 'HLS / DASH'}</span>
+        )}
         {resource.mergeAudio && <span className="audio-merge-chip">+ AUDIO</span>}
         {width && isImage && <span className="dimension-chip">{width}</span>}
       </button>
@@ -190,8 +194,14 @@ export default function ResourceCard({
         <button
           type="button"
           className="download-mini"
-          title={resource.isStream ? '流媒体清单需要转码或专用下载器' : '下载此资源'}
-          disabled={resource.isStream}
+          title={
+            hlsDownloadable
+              ? '下载 HLS 分片并自动封装为 MP4'
+              : resource.isStream
+                ? '该流媒体清单暂不支持下载'
+                : '下载此资源'
+          }
+          disabled={!downloadable}
           onClick={() => onDownload(resource)}
         >
           <Download size={15} />

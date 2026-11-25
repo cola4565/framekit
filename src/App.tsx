@@ -25,7 +25,7 @@ import EmptyState from './components/EmptyState'
 import PreviewModal from './components/PreviewModal'
 import ResourceCard from './components/ResourceCard'
 import Sidebar from './components/Sidebar'
-import { lowestQualityVariant } from './shared/media'
+import { isHlsResource, lowestQualityVariant } from './shared/media'
 import UpdateModal from './components/UpdateModal'
 import type {
   DownloadProgress,
@@ -586,10 +586,12 @@ export default function App(): React.JSX.Element {
 
   const queueResources = useCallback(
     async (resources: MediaResource[], openQueue = true): Promise<void> => {
-      const downloadable = resources.filter((resource) => !resource.isStream)
+      const downloadable = resources.filter(
+        (resource) => !resource.isStream || isHlsResource(resource)
+      )
       const skipped = resources.length - downloadable.length
       if (downloadable.length === 0) {
-        notify('HLS / DASH 清单不能直接作为成片下载', 'error')
+        notify('该流媒体清单暂不支持直接下载', 'error')
         return
       }
 
@@ -618,7 +620,7 @@ export default function App(): React.JSX.Element {
         } else {
           notify(
             skipped > 0
-              ? `已加入 ${response.queued} 个下载任务，跳过 ${skipped} 个流媒体清单`
+              ? `已加入 ${response.queued} 个下载任务，跳过 ${skipped} 个暂不支持的流媒体清单`
               : `已加入 ${response.queued} 个下载任务`,
             'success'
           )

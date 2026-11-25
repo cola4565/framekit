@@ -51,6 +51,19 @@ export function toThumbnailUrl(rawUrl: string, referer?: string): string {
   return `${THUMBNAIL_SCHEME}://thumb/?${params.toString()}`
 }
 
+/**
+ * HLS 清单本身不能直接播放，但可以下载分片后在本地封装成 MP4。
+ * 目前只把 `.m3u8` 视为可下载流；DASH `.mpd` 仍需专用处理。
+ */
+export function isHlsResource(resource: MediaResource): boolean {
+  if (!resource.isStream) return false
+  try {
+    return /\.m3u8$/i.test(new URL(resource.url).pathname)
+  } catch {
+    return false
+  }
+}
+
 export function lowestQualityVariant(
   resource: MediaResource,
   all: MediaResource[] | undefined

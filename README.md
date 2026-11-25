@@ -4,7 +4,7 @@
 
 支持 Windows 与 macOS，基于 Electron + React + TypeScript 构建，解析与下载全部在本机完成。
 
-当前正式版：**v1.3.6**
+当前正式版：**v1.3.7**
 
 ![FrameKit 素材解析界面](docs/screenshot-results.png)
 
@@ -12,9 +12,9 @@
 
 ## 下载
 
-- [FrameKit 1.3.6 · Windows x64 安装包](https://github.com/cola4565/framekit/releases/download/v1.3.6/FrameKit-1.3.6-Windows-x64.exe)
-- [FrameKit 1.3.6 · macOS Apple Silicon](https://github.com/cola4565/framekit/releases/download/v1.3.6/FrameKit-1.3.6-macOS-arm64.dmg)
-- [FrameKit 1.3.6 · macOS Intel](https://github.com/cola4565/framekit/releases/download/v1.3.6/FrameKit-1.3.6-macOS-x64.dmg)
+- [FrameKit 1.3.7 · Windows x64 安装包](https://github.com/cola4565/framekit/releases/download/v1.3.7/FrameKit-1.3.7-Windows-x64.exe)
+- [FrameKit 1.3.7 · macOS Apple Silicon](https://github.com/cola4565/framekit/releases/download/v1.3.7/FrameKit-1.3.7-macOS-arm64.dmg)
+- [FrameKit 1.3.7 · macOS Intel](https://github.com/cola4565/framekit/releases/download/v1.3.7/FrameKit-1.3.7-macOS-x64.dmg)
 - [全部版本与更新说明](https://github.com/cola4565/framekit/releases)
 
 Windows 首次安装可以选择安装盘和目录，默认装到 `%LOCALAPPDATA%\Programs\framekit`，也支持 `D:\FrameKit` 等位置；之后可直接在应用内静默更新。从 1.2.0 及更早版本升级需要手动安装一次。macOS 安装包暂未配置 Apple 开发者签名与公证，首次运行时系统可能提示未知开发者；macOS 的应用内静默安装也要等签名配置完成后启用。
@@ -29,11 +29,13 @@ Windows 卸载时会删除下载记录、登录态、设置和所有缓存，只
 - **内置预览**：图片、视频、音频和流媒体清单说明；支持复制直链和浏览器打开。Bilibili 多清晰度资源预览时自动使用最低清晰度，下载仍按你选择的清晰度执行。
 - **视频封面**：页面没有封面图时，自动从视频首帧抽取封面显示在资源卡片和预览弹窗里；直链无法直接播放时也能先看到画面再决定要不要下载，不用下载完才发现内容不对。
 - **批量下载**：多选、队列并发、实时速度与进度、取消、文件名去重、Content-Disposition 文件名、`.part` 临时文件。
+- **HLS 下载**：`.m3u8` 流会按分片下载，完成后自动封装为带音轨的 MP4；队列按分片进度显示百分比，清晰度按清单分别列出。
 - **下载队列管理**：记录本地持久化，可逐条删除（同时删除磁盘文件）、清空列表、定位文件；磁盘文件被外部删除后会在队列中标记“文件已在磁盘上删除”。
 - **Bilibili 专用解析**：读取账号可用的清晰度列表（含大会员 4K/1080P+ 等），分别下载独立视频流与音频流，并用内置 ffmpeg 自动合并为标准 MP4。
 - **抖音专用解析**：捕获 DASH（Dynamic Adaptive Streaming over HTTP，动态自适应流媒体）视频流与独立音频流，按会话参数配对后用内置 ffmpeg 自动合并为标准 MP4；需要登录时可在应用内完成抖音登录。
 - **爱给网专用解析**：搜索页读取公开低清预览；条目页通过站点正常登录流程读取 1080P/720P 等下载规格。未登录或权限不足时只保留公开预览，不绕过登录、验证码、会员或付费限制。
 - **微博专用解析**：视频页与个人主页上的视频（`layerid` 参数）都能直接读出播放地址，并显示标题、时长、文案与封面；需要时可在应用内登录微博以解析仅登录可见的内容。
+- **央视网专用解析**：`tv.cctv.com` 点播页通过视频编号与播放接口读取 HLS 清单，显示标题、封面、时长与可用清晰度；站点只提供单一路码率时会明确提示。
 - **应用内静默更新**：右上角“检查更新”读取 GitHub 最新正式版；Windows 版点击“立即更新”后在后台下载，完成后一键重启安装，不弹出安装向导、不询问安装位置。GitHub 接口限流时会自动改用网页通道读取，不会直接失败。
 - **更新设置**：可在更新弹窗里切换更新源（GitHub 官方 / 自建更新源）、设置更新专用代理、配置下载镜像；网络受限时不用等官方放行。
 - **后台运行**：关闭窗口时选择最小化到系统托盘 / 菜单栏，下载任务继续执行；托盘右键可直接退出。
