@@ -1,4 +1,4 @@
-import { app, net, session } from 'electron'
+import { app, session } from 'electron'
 import { autoUpdater } from 'electron-updater'
 import { join } from 'node:path'
 import type { UpdateCheckResult, UpdateDownloadState } from '../src/shared/types'
@@ -18,6 +18,25 @@ import { getUpdateSettings } from './update-settings'
 const RELEASE_API = 'https://api.github.com/repos/cola4565/framekit/releases/latest'
 const RELEASE_PAGE = 'https://github.com/cola4565/framekit/releases/latest'
 const RELEASE_TAG_PAGE = 'https://github.com/cola4565/framekit/releases/tag'
+
+/**
+ * electron-updater 下载更新包时使用的会话分区名。
+ *
+ * 官方实现固定用 `electron-updater` 这个 partition 走 `electron.net.request`，
+ * 所以更新专用代理与镜像必须挂在同一个 partition 上，否则设置完全无效。
+ */
+const UPDATER_PARTITION = 'electron-updater'
+
+/**
+ * 更新专用会话。
+ *
+ * 把它和 `defaultSession` 分开有两个好处：
+ * 1. 更新代理 / 镜像不会影响主窗口的解析、嗅探与预览请求；
+ * 2. 更新检查与更新包下载走同一个会话，代理设置两边都生效。
+ */
+function updaterSession(): Electron.Session {
+  return session.fromPartition(UPDATER_PARTITION, { cache: false })
+}
 
 /**
  * 更新器缓存根目录。
@@ -108,7 +127,7 @@ async function checkViaApi(
 ): Promise<UpdateCheckResult> {
   let response: Response
   try {
-    response = await net.fetch(RELEASE_API, {
+    response = await updaterSession().fetch(RELEASE_API, {
       headers: {
         Accept: 'application/vnd.github+json',
         'X-GitHub-Api-Version': '2022-11-28',
@@ -166,7 +185,7 @@ async function checkViaWebEndpoints(
   // 走 Electron 的 Chromium 网络栈，沿用系统代理设置；
   // 宿主 Node 的 fetch 不读取系统代理，用户开代理时会直接失败。
   const fetcher: Fetcher = (input, init) =>
-    net.fetch(applyMirror(getUpdateSettings().mirror, input), {
+    updaterSession().fetch(applyMirror(getUpdateSettings().mirror, input), {
       headers: init?.headers,
       redirect: init?.redirect,
       signal: AbortSignal.timeout(15000)
@@ -289,7 +308,7 @@ export async function checkForUpdates(
 ): Promise<UpdateCheckResult> {
   const settings = getUpdateSettings()
   const fetcher: Fetcher = (input, init) =>
-    net.fetch(input, {
+    updaterSession().fetch(input, {
       headers: init?.headers,
       redirect: init?.redirect,
       signal: AbortSignal.timeout(15000)
@@ -345,10 +364,12 @@ let lastProgress = { percent: 0, transferred: 0, total: 0, bytesPerSecond: 0 }
 export async function applyUpdateProxy(proxy: string): Promise<void> {
   try {
     if (!proxy || proxy === 'direct') {
-      await session.defaultSession.setProxy({ mode: 'direct' })
+      await updaterSession().setProxy(
+        proxy === 'direct' ? { mode: 'direct' } : { mode: 'system' }
+      )
       return
     }
-    await session.defaultSession.setProxy({ proxyRules: proxy })
+    await updaterSession().setProxy({ proxyRules: proxy })
   } catch (error) {
     console.error('FrameKit update proxy setup failed:', error)
   }
@@ -368,7 +389,7 @@ function installMirrorInterceptor(): void {
   if (mirrorInterceptorInstalled) return
   mirrorInterceptorInstalled = true
 
-  session.defaultSession.webRequest.onBeforeRequest((details, callback) => {
+  updaterSession().webRequest.onBeforeRequest((details, callback) => {
     const mirror = getUpdateSettings().mirror
     if (!mirror) {
       callback({})

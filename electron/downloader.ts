@@ -11,12 +11,7 @@ import type {
   StartDownloadsResult
 } from '../src/shared/types'
 import { sanitizeFilename } from './extractor'
-import {
-  bestHlsVariant,
-  isHlsUrl,
-  parseHlsMaster,
-  parseHlsMedia
-} from './hls'
+import { bestHlsVariant, isHlsUrl, parseHlsMaster, parseHlsMedia } from './hls'
 import { buildChildEnv } from './storage'
 
 const CONCURRENCY = 3
@@ -378,7 +373,7 @@ export class DownloadManager {
     task.startedAt = Date.now()
     this.emit(task)
 
-    if (isHlsUrl(task.request.url)) {
+    if (task.request.isStream && isHlsUrl(task.request.url)) {
       await this.runHls(task)
       return
     }
@@ -669,6 +664,47 @@ export class DownloadManager {
     return response.text()
   }
 
+  private async fetchHlsChunk(url: string, task: DownloadTask): Promise<Response> {
+    return fetch(url, {
+      headers: requestHeaders(url, task.request.pageUrl, undefined, task.request.cookie),
+      redirect: 'follow',
+      signal: task.controller.signal
+    })
+  }
+
+  /**
+   * 下载一个 HLS 分片并读成内存缓冲。
+   *
+   * HLS 分片很小（通常 2～10 秒），整片读进内存再按顺序落盘，
+   * 既能并发提速，又不会打乱分片顺序，也不会让磁盘写入变成瓶颈。
+   */
+  private async fetchHlsSegment(
+    url: string,
+    duration: number,
+    task: DownloadTask
+  ): Promise<{ data: Buffer; duration: number }> {
+    const response = await this.fetchHlsChunk(url, task)
+    if (!response.ok) {
+      await response.body?.cancel()
+      throw new Error(`HTTP ${response.status}`)
+    }
+    const reader = response.body?.getReader()
+    if (!reader) throw new Error('服务器没有返回文件内容')
+
+    const chunks: Buffer[] = []
+    let size = 0
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      if (!value) continue
+      const buffer = Buffer.from(value)
+      chunks.push(buffer)
+      size += buffer.byteLength
+      task.received += buffer.byteLength
+    }
+    return { data: Buffer.concat(chunks, size), duration }
+  }
+
   private async runHls(task: DownloadTask): Promise<void> {
     const finalPath = availablePath(
       task.destination,
@@ -691,10 +727,20 @@ export class DownloadManager {
       this.emit(task)
 
       const firstText = await this.fetchPlaylistText(task.request.url, task)
-      let mediaUrl = task.request.url
       const variants = parseHlsMaster(firstText, task.request.url)
-      const bestVariant = bestHlsVariant(variants)
-      if (bestVariant) mediaUrl = bestVariant.url
+
+      /**
+       * 选档规则：
+       * - 请求地址本身就是某一档的媒体清单（央视 / Bilibili 风格）：直接用它，
+       *   绝不能自动升档，否则用户选的低清会变成高清；
+       * - 请求地址是多码率 master 清单（通用 .m3u8 资源）：挑最高的一档下载。
+       */
+      const mediaUrl =
+        variants.length === 0
+          ? task.request.url
+          : variants.some((variant) => variant.url === task.request.url)
+            ? task.request.url
+            : (bestHlsVariant(variants)?.url ?? task.request.url)
 
       const mediaText =
         mediaUrl === task.request.url ? firstText : await this.fetchPlaylistText(mediaUrl, task)
@@ -714,45 +760,24 @@ export class DownloadManager {
       let lastEmit = 0
       const totalDuration = playlist.duration
 
-      const appendUrl = async (
-        url: string,
-        duration: number,
-        message: string
-      ): Promise<void> => {
-        const response = await fetch(url, {
-          headers: requestHeaders(url, task.request.pageUrl, undefined, task.request.cookie),
-          redirect: 'follow',
-          signal: task.controller.signal
-        })
-        if (!response.ok) {
-          await response.body?.cancel()
-          throw new Error(`HTTP ${response.status}`)
+      const writeBuffer = async (buffer: Buffer): Promise<void> => {
+        if (!stream?.write(buffer)) {
+          await new Promise<void>((resolveDrain, rejectDrain) => {
+            const onDrain = (): void => {
+              stream?.off('error', onError)
+              resolveDrain()
+            }
+            const onError = (error: Error): void => {
+              stream?.off('drain', onDrain)
+              rejectDrain(error)
+            }
+            stream?.once('drain', onDrain)
+            stream?.once('error', onError)
+          })
         }
-        const reader = response.body?.getReader()
-        if (!reader) throw new Error('服务器没有返回文件内容')
+      }
 
-        while (true) {
-          const { done, value } = await reader.read()
-          if (done) break
-          if (!value) continue
-          const buffer = Buffer.from(value)
-          if (!stream?.write(buffer)) {
-            await new Promise<void>((resolveDrain, rejectDrain) => {
-              const onDrain = (): void => {
-                stream?.off('error', onError)
-                resolveDrain()
-              }
-              const onError = (error: Error): void => {
-                stream?.off('drain', onDrain)
-                rejectDrain(error)
-              }
-              stream?.once('drain', onDrain)
-              stream?.once('error', onError)
-            })
-          }
-          task.received += buffer.byteLength
-        }
-
+      const updateProgress = (duration: number, message: string): void => {
         completedDuration += duration
         if (totalDuration > 0) {
           task.percent = Math.min(99, Math.round((completedDuration / totalDuration) * 100))
@@ -770,16 +795,41 @@ export class DownloadManager {
       if (playlist.initSegment) {
         task.message = '正在下载 HLS 初始化分片…'
         this.emit(task)
-        await appendUrl(playlist.initSegment, 0, task.message)
+        const init = await this.fetchHlsSegment(playlist.initSegment, 0, task)
+        await writeBuffer(init.data)
+        updateProgress(0, task.message)
       }
 
-      for (let index = 0; index < playlist.segments.length; index += 1) {
-        const segment = playlist.segments[index]
-        await appendUrl(
-          segment.url,
-          segment.duration,
-          `正在下载 HLS 分片 ${index + 1}/${playlist.segments.length}`
+      /**
+       * 分片预取窗口。
+       *
+       * 一次预取 HLS_SEGMENT_PREFETCH 个分片，并严格按清单顺序写入磁盘，
+       * 因此既不会打乱 TS 顺序，也能把串行往返摊平成并发请求。
+       * 窗口固定很小，内存占用可控（央视单片约 0.5～3 MB）。
+       */
+      const HLS_SEGMENT_PREFETCH = 4
+      const segments = playlist.segments
+      let cursor = 0
+
+      while (cursor < segments.length) {
+        const batchSize = Math.min(HLS_SEGMENT_PREFETCH, segments.length - cursor)
+        const batch = await Promise.all(
+          Array.from({ length: batchSize }, (_unused, offset) => {
+            const segment = segments[cursor + offset]
+            return this.fetchHlsSegment(segment.url, segment.duration, task)
+          })
         )
+
+        for (let offset = 0; offset < batch.length; offset += 1) {
+          const index = cursor + offset
+          await writeBuffer(batch[offset].data)
+          updateProgress(
+            batch[offset].duration,
+            `正在下载 HLS 分片 ${index + 1}/${segments.length}`
+          )
+        }
+
+        cursor += batch.length
       }
 
       await new Promise<void>((resolveEnd, rejectEnd) => {
@@ -823,7 +873,6 @@ export class DownloadManager {
       task.percent = 100
       task.status = 'done'
       task.speed = 0
-      task.finishedAt = Date.now()
       task.message = 'HLS 已封装为 MP4'
       this.emit(task)
     } catch (error) {

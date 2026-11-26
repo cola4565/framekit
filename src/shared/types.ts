@@ -83,6 +83,7 @@ export interface DownloadRequest {
   pageUrl: string
   audioUrl?: string
   audioMime?: string
+  isStream?: boolean
   cookie?: string
 }
 

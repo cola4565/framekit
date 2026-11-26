@@ -243,14 +243,21 @@ export async function generateThumbnail(
 
   try {
     await acquireSlot()
-    await runFfmpeg(args)
-  } catch (error) {
-    console.error('Thumbnail ffmpeg failed, falling back to browser:', error)
-    const fallback = await captureViaBrowser(request)
-    if (!fallback?.length) return null
-    await writeFile(target, fallback).catch(() => undefined)
-    void pruneCache(directory)
-    return { data: fallback, mime: 'image/jpeg' }
+    try {
+      await runFfmpeg(args)
+    } catch {
+      // ffmpeg 失败时回退到隐藏浏览器截图；两者共用同一个并发槽，
+      // 避免大量无封面视频同时创建隐藏窗口把内存与 CPU 打满。
+      try {
+        const fallback = await captureViaBrowser(request)
+        if (!fallback?.length) return null
+        await writeFile(target, fallback).catch(() => undefined)
+        void pruneCache(directory)
+        return { data: fallback, mime: 'image/jpeg' }
+      } catch {
+        return null
+      }
+    }
   } finally {
     releaseSlot()
   }

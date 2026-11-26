@@ -1,16 +1,19 @@
 import { net } from 'electron'
 import type { MediaResource, ParseProgress } from '../src/shared/types'
 import { sanitizeFilename } from './extractor'
-import {
-  bestHlsVariant,
-  parseHlsMaster,
-  qualityLabelOfVariant,
-  type HlsVariant
-} from './hls'
+import { parseHlsMaster, qualityLabelOfVariant, type HlsVariant } from './hls'
 
 const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36'
 const REQUEST_TIMEOUT_MS = 15000
+
+/**
+ * 央视网播放器使用的四档清晰度文案。
+ *
+ * 网页播放器把码率 450 / 850 / 1200 / 2000 分别标成
+ * 流畅 / 标清 / 高清 / 超清，这里沿用同一套文案。
+ */
+const CCTV_QUALITY_LABELS = ['流畅', '标清', '高清', '超清']
 
 interface CctvPageIds {
   guid: string
@@ -30,6 +33,10 @@ interface CctvPlayInfo {
   hls_url?: string
   title?: string
   image?: string
+  manifest?: {
+    hls_h5e_url?: string
+    hls_enc_url?: string
+  }
   video?: { totalLength?: string }
 }
 
@@ -101,6 +108,19 @@ function absoluteUrl(value: string | undefined, baseUrl: string): string | undef
   }
 }
 
+/**
+ * 把央视 HLS 多码率清单映射成播放器一致的清晰度文案。
+ *
+ * 四档时按清单顺序对应 流畅 / 标清 / 高清 / 超清；
+ * 档位数不是 4 时退回到按分辨率 / 码率生成标签。
+ */
+export function cctvQualityLabels(variants: HlsVariant[]): string[] {
+  if (variants.length === CCTV_QUALITY_LABELS.length) {
+    return [...CCTV_QUALITY_LABELS]
+  }
+  return variants.map((variant) => qualityLabelOfVariant(variant))
+}
+
 async function fetchText(url: string): Promise<string> {
   const response = await net.fetch(url, {
     headers: {
@@ -121,7 +141,9 @@ async function fetchText(url: string): Promise<string> {
 async function fetchJson<T>(url: string): Promise<T> {
   const text = await fetchText(url)
   try {
-    return JSON.parse(text) as T
+    const jsonStart = text.indexOf('{', text.indexOf('var html5VideoData'))
+    const jsonEnd = text.indexOf("';getHtml5VideoData", jsonStart)
+    return JSON.parse(jsonStart >= 0 && jsonEnd >= 0 ? text.slice(jsonStart, jsonEnd) : text) as T
   } catch {
     throw new Error('CCTV 接口返回了无法读取的数据')
   }
@@ -131,7 +153,7 @@ async function loadPlayInfo(
   ids: CctvPageIds,
   info: CctvVideoInfo
 ): Promise<{ pid: string; play: CctvPlayInfo }> {
-  const candidates = [ids.parentGuid, info.pid, ids.guid].filter(
+  const candidates = [ids.guid, ids.parentGuid, info.pid].filter(
     (value): value is string => Boolean(value)
   )
   let lastError: unknown
@@ -168,18 +190,37 @@ export async function extractCctvPage(
   const { pid, play } = await loadPlayInfo(ids, info)
 
   const hlsUrl = absoluteUrl(play.hls_url, pageUrl)
-  if (!hlsUrl) throw new Error('央视网没有返回可用的 HLS 播放地址')
+  const variantMasterUrl = absoluteUrl(play.manifest?.hls_h5e_url, pageUrl)
+  const encryptedMasterUrl = absoluteUrl(play.manifest?.hls_enc_url, pageUrl)
+  if (!hlsUrl && !variantMasterUrl && !encryptedMasterUrl) {
+    throw new Error('央视网没有返回可用的 HLS 播放地址')
+  }
 
   onProgress({ stage: 'parse', message: '正在读取 HLS 清晰度清单…', percent: 72 })
 
-  let variants: HlsVariant[] = []
-  try {
-    const master = await fetchText(hlsUrl)
-    variants = parseHlsMaster(master, hlsUrl)
-  } catch {
-    // 清单读取失败时仍然保留 HLS 地址，下载阶段会再试一次。
+  const variants: HlsVariant[] = []
+  let fallbackUrl: string | undefined
+  for (const masterUrl of [variantMasterUrl, encryptedMasterUrl, hlsUrl]) {
+    if (!masterUrl) continue
+    try {
+      const master = await fetchText(masterUrl)
+      const parsed = parseHlsMaster(master, masterUrl)
+      if (parsed.length === 0) {
+        fallbackUrl ??= masterUrl
+        continue
+      }
+      for (const variant of parsed) {
+        if (!variants.some((existing) => existing.url === variant.url)) variants.push(variant)
+      }
+      break
+    } catch {
+      // 优先尝试播放器使用的多码率清单，失败后保留普通 HLS 地址。
+    }
   }
-  if (variants.length === 0) variants = [{ url: hlsUrl }]
+  if (variants.length === 0) {
+    if (!fallbackUrl) throw new Error('央视网没有返回可下载的视频清晰度')
+    variants.push({ url: fallbackUrl })
+  }
 
   const title =
     info.title?.trim() || play.title?.trim() || new URL(pageUrl).hostname
@@ -192,8 +233,10 @@ export async function extractCctvPage(
     '央视网使用 HLS 分片，下载时会自动抓取分片并封装为 MP4（含音轨）。'
   ]
 
+  const qualityLabels = cctvQualityLabels(variants)
+
   const resources: MediaResource[] = variants.map((variant, index) => {
-    const quality = qualityLabelOfVariant(variant)
+    const quality = qualityLabels[index]
     const detail = [
       variant.width && variant.height ? `${variant.width}×${variant.height}` : '',
       variant.bandwidth ? `${Math.round(variant.bandwidth / 1000)} kbps` : ''
@@ -202,7 +245,7 @@ export async function extractCctvPage(
       .join(' · ')
 
     return {
-      id: `cctv_${pid}_${variant.height ?? variant.bandwidth ?? index}`,
+      id: `cctv_${pid}_${variant.height ?? 0}_${variant.bandwidth ?? index}`,
       url: variant.url,
       kind: 'video',
       source: 'network',
@@ -221,16 +264,6 @@ export async function extractCctvPage(
       groupId
     }
   })
-
-  if (resources.length === 1) {
-    const only = bestHlsVariant(variants)
-    const detail = only?.height
-      ? `${only.width ?? ''}×${only.height}`.replace(/^×/, '')
-      : only?.bandwidth
-        ? `${Math.round(only.bandwidth / 1000)} kbps`
-        : '单一清晰度'
-    warnings.push(`站点当前只提供 ${detail} 这一路 HLS 清晰度，没有更高码率可选。`)
-  }
 
   onProgress({
     stage: 'merge',

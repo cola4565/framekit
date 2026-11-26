@@ -1,6 +1,6 @@
 # FrameKit 项目基线
 
-面向视频剪辑 / 后期工作者的跨平台桌面工具箱。当前只有一个模块：**网页素材解析器**（图片、音频、视频、字幕、其他文件）。仓库：`cola4565/framekit`，当前版本 **1.3.7**，已发布 Windows NSIS 安装包与 macOS DMG（arm64 / x64）。
+面向视频剪辑 / 后期工作者的跨平台桌面工具箱。当前只有一个模块：**网页素材解析器**（图片、音频、视频、字幕、其他文件）。仓库：`cola4565/framekit`，当前版本 **1.3.8**，已发布 Windows NSIS 安装包与 macOS DMG（arm64 / x64）。
 
 ## 技术栈
 
@@ -60,17 +60,25 @@ scripts/               冒烟测试、演示服务器、构建清理
 - **微博接口的字段形态**：`page_info.page_pic` 是 `{ url, width, height }` 对象不是字符串；`media_info` 只有 `stream_url` / `stream_url_hd` / `duration` 三个字段；接口要用手机 UA（iPhone）才直接响应，否则要先拿访客 Cookie。`Session.fetch` 的 `json()` 不可靠，统一用 `text()` 再 `JSON.parse`。
 - **微博访客身份**：`persist:weibo` 保存 SUB Cookie。`ensureVisitorIdentity()` 访问一次 `m.weibo.cn` 就能拿到，之后接口与页面都能用，不必每次重算指纹。
 - **央视网点播已改成 HLS**：页面里 `video.chapters[].url` 可能全是空串，只有 `hls_url` 有效。`electron/cctv.ts` 先从页面取 `guid` / `parentGuid`，再查 `api.cntv.cn/video/videoinfoByGuid` 与 `vdn.apps.cntv.cn/api/getHttpVideoInfo.do?pid=...`，最后读 master playlist 列出清晰度。不要只靠静态扫描找 MP4。
-- **HLS 下载**：`.m3u8` 资源走 `downloader.ts` 的 `runHls()`：顺序拉取 TS / fMP4 分片写入单个临时文件，再用 ffmpeg `-c copy` 封装为 MP4，音轨随分片一起保留。进度按已完成分片时长计算（`DownloadProgress.percent`），不要用 `content-length` 推断。加密 HLS（AES-128）与 `EXT-X-BYTERANGE` 分片会明确报不支持。
+- **央视必须用页面 `guid`，不是 `parentGuid`**：`parentGuid` 是整集 GUID，它的播放接口只暴露 480×270 一路；页面 `guid` 是分片视频 GUID，播放接口的 `manifest.hls_h5e_url` 才是网页播放器用的多码率清单。`loadPlayInfo()` 的候选顺序是 `[guid, parentGuid, info.pid]`。
+- **央视四档清晰度**：网页播放器把码率 450 / 850 / 1200 / 2000 分别标成 **流畅 / 标清 / 高清 / 超清**。`cctvQualityLabels()` 负责映射（导出以便测试）。高清与超清同为 720P，资源 ID 必须用 `cctv_<pid>_<height>_<bandwidth>` 才能区分，否则两档会撞 ID。
+- **央视播放接口可能不是纯 JSON**：`vdn.apps.cntv.cn` 有时返回 `var html5VideoData = '{...}';getHtml5VideoData(...)` 形式，`fetchJson()` 已兼容这种形态。
+- **HLS 下载**：`.m3u8` 资源走 `downloader.ts` 的 `runHls()`：拉取 TS / fMP4 分片写入单个临时文件，再用 ffmpeg `-c copy` 封装为 MP4，音轨随分片一起保留。进度按已完成分片时长计算（`DownloadProgress.percent`），不要用 `content-length` 推断。加密 HLS（AES-128）与 `EXT-X-BYTERANGE` 分片会明确报不支持。
+- **HLS 选档不能自动升档**：请求地址本身就是某一档的媒体清单时（央视 / Bilibili 风格），必须用它，绝不能换成 master 里的最高档，否则用户选的低清会变高清。只有请求地址是 master 清单时（通用 `.m3u8` 资源）才用 `bestHlsVariant()` 挑最佳档。
+- **HLS 分片并发预取**：分片按 4 个一批并发下载（`HLS_SEGMENT_PREFETCH`），**但严格按清单顺序写入磁盘**，顺序错了 ffmpeg 封装会失败。窗口固定小，内存占用可控。
+- **HLS 走 `isStream` 标记**：下载器只在 `task.request.isStream && isHlsUrl(url)` 时才走 `runHls()`，避免普通 `.m3u8` 直链被误判。`isStream` 要跨 IPC 保留（`src/shared/types.ts` → `src/App.tsx` → `electron/main.ts` → `downloader.ts`）。
 - **HLS 是“不可直接播放但可下载”**：资源保持 `isStream: true`，`src/shared/media.ts` 的 `isHlsResource()` 负责放行下载；`App.tsx` 的批量过滤、`ResourceCard` 与 `PreviewModal` 的下载按钮都要用它判断，DASH `.mpd` 仍然禁用下载。预览显示封面，不要尝试把 m3u8 直接塞给 `<video>`。
 - **专用解析的判断要看原始地址**：`parsePage` 里微博的判断必须用 `pageUrl`（用户输入的原始地址），不能用静态扫描的 `finalUrl`——微博会把它改成 `passport.weibo.com`，导致适配器根本不触发。
 - **webRequest 监听必须回调**：Electron 的 `webRequest.onBeforeRequest` 监听器必须调用 `callback({})`，否则会挂起页面请求。爱给网曾因漏掉回调导致下载按钮和预览全部读不到。
 - **预览代理**：`framekit-media://media/?url=...&referer=...`。新增 scheme 时记得同步 `index.html` 的 CSP（`img-src` / `media-src` 已包含 `framekit-media:`）。
 - **视频封面**：解析阶段先从 `<video poster>` / Open Graph / 结构化缩略图回填；仍无封面时由 `electron/thumbnail.ts` 用内置 ffmpeg 抽首帧（`scale=480:-2 -q:v 4 -f mjpeg`），ffmpeg 失败回退到隐藏 BrowserWindow `capturePage()`。走自定义 scheme `framekit-thumb://thumb/?url=...&referer=...`，`index.html` 的 CSP `img-src` 需包含 `framekit-thumb:`。封面缓存在 `userData/thumbnails/<sha1>.jpg`，上限 200 个，按 mtime 淘汰。
+- **封面并发槽只有一条路径**：`generateThumbnail()` 里 ffmpeg 抽帧与浏览器回退**共用同一个 `acquireSlot()`**，`finally` 只 `releaseSlot()` 一次。曾经回退路径额外 acquire 一次又 release 一次，槽位计数会失衡，最终所有封面任务互相死等。
 - **封面请求头要跟站点走**：抽帧请求头与 `electron/downloader.ts` 的 `requestHeaders` 保持一致（Bilibili 需要 `Range: bytes=0-` + Referer + Cookie，抖音 / 爱给网按页面来源带 Referer 与 Cookie）。微博等 CDN 直链返回 403 时，必须使用完整签名 URL（含 `ssig` / `Expires` / `label` / `media_id` 等参数），简化 URL 必然失败。
 - **检查更新有多条通道**：`electron/updater.ts` 按顺序尝试「自建更新源 → GitHub API → GitHub 网页端点」，任一通道成功即返回，`UpdateCheckResult.source` 标记实际来源（`feed` / `api` / `web`）。GitHub API 对代理出口 IP 的匿名请求限流很严（403 / 429），网页通道不消耗 API 配额。
 - **Electron 的 net.fetch 拿不到重定向后的 URL**：`response.url` 是空串，`redirect: 'manual'` 会抛 `Redirect was cancelled`。取最新 tag 要从 `releases/latest` 页面的 `og:url` 里解析，或用 atom feed 的第一个条目。magpie 用的是 Go 的 `http.Client`（能读 `Location` 头），不能直接照搬。
 - **atom feed 的 id 不是 releases/tag 格式**：形如 `tag:github.com,2008:Repository/1459836626/v1.3.3`，版本号在最后一段。
 - **更新设置**：`electron/update-settings.ts` 存在 `userData/config/update-settings.json`。自定义更新源是不消耗 GitHub 配额的兜底；镜像只改下载地址，SHA-512 校验仍按官方清单执行；代理只影响更新检查与下载。
+- **更新专用会话是独立分区**：`electron-updater` 内部固定用 `session.fromPartition('electron-updater')` 发请求。更新代理、镜像拦截与更新检查必须全部挂在这个分区上（`electron/updater.ts` 的 `updaterSession()`），挂到 `defaultSession` 对更新下载完全不生效，还会顺带污染主窗口的解析与预览请求。空代理要用 `{ mode: 'system' }` 恢复“跟随系统代理”，`direct` 才用 `{ mode: 'direct' }`。
 - **预览用最低清晰度，下载用所选清晰度**：`lowestQualityVariant()` 按 `groupId` 找同组资源，`PreviewModal` 的 `playbackResource` 与 `resource` 分离。
 - **下载队列**：记录持久化；删除记录会删磁盘文件；删除时先 `abort` 并等待运行中的 Promise 结束再删，避免“删完又被重命名写回”；打开队列每 5 秒校验文件是否存在。
 - **关闭与托盘**：关闭按钮统一走 `window:close-request` → 渲染层确认弹窗 → `window:close-action`；托盘常驻，Windows 最小化隐藏到系统托盘，macOS 使用菜单栏模板图标且原生黄色最小化保留 Dock 行为。
@@ -90,12 +98,16 @@ npm run test:download  # 普通下载
 npm run test:update    # 版本比较
 npm run test:storage   # 数据目录 / 环境变量回归
 npm run test:cctv      # 央视网地址识别与 HLS 清单解析
+npm run test:cctv:live    # 央视真实页面解析（需要网络）
+npm run test:cctv:download # 央视四档真实下载 + 分辨率/音轨校验（需要网络）
 npm run test:deep      # 深度嗅探（需要 Electron）
 npm run test:ui        # 需要先 npm run demo + npm run dev
 npm run test:bilibili  # 真实 Bilibili 解析 + 下载 + 合并校验（需要网络/可能需登录）
 ```
 
 UI 冒烟需要两个后台进程：`npm run demo`（127.0.0.1:8787）与 `FRAMEKIT_DEBUG_PORT=9222 npm run dev`，然后 `npm run test:ui`。
+
+`npm run test:*` 在沙箱里会报 `spawn EPERM`（esbuild 子进程被禁），要在沙箱外跑。`test:cctv:live` / `test:cctv:download` 需要 Electron 运行时，不能用 tsx 直接跑。
 
 ## 数据位置
 
@@ -166,6 +178,12 @@ UI 冒烟需要两个后台进程：`npm run demo`（127.0.0.1:8787）与 `FRAME
 | 微博接口报 `data argument must be of type string` | `page_info.page_pic` 是对象被当成字符串传给了 `makeResource` | 用 `extractPosterUrl()` 兼容对象与字符串两种形态 |
 | 微博接口拿不到某条 mid | 该条在移动端接口不可见 | 回退内置浏览器嗅探 `tv/show` 页的真实网络请求 |
 | 央视网点播页解析不到视频 | 页面只给 `hls_url`，`video.chapters[].url` 是空串 | 走 `electron/cctv.ts`：guid → videoinfoByGuid → getHttpVideoInfo → master m3u8 |
+| 央视只解析出 270P 一路 | 用了 `parentGuid`（整集 GUID），它的播放接口只暴露低清 | 改用页面 `guid`，读 `manifest.hls_h5e_url` 的多码率清单，可得流畅/标清/高清/超清四档 |
+| 央视高清和超清只生成一条资源 | 两者分辨率同为 720P | 资源 ID 用 `cctv_<pid>_<height>_<bandwidth>`，靠码率区分 |
+| HLS 下载的清晰度被偷偷升档 | 下载器用 `bestHlsVariant()` 覆盖了用户所选档位 | 请求地址本身是某档媒体清单时直接用它；只有 master 清单才挑最佳档 |
+| 更新代理 / 镜像设置无效 | electron-updater 用独立分区 `electron-updater`，设置却挂在 `defaultSession` | 代理、镜像与更新检查全部改用 `updaterSession()`（`session.fromPartition('electron-updater')`） |
+| 清空更新代理后仍不跟随系统代理 | 只实现了 `{ mode: 'direct' }` | 空代理用 `{ mode: 'system' }`，`direct` 才用直连 |
+| 大量无封面视频时应用卡死 | ffmpeg 失败回退的隐藏 BrowserWindow 没有并发限制 | 回退路径与 ffmpeg 共用同一个并发槽（`MAX_CONCURRENT`），一次调用只 acquire/release 一次 |
 | HLS 下载后没有声音或文件损坏 | 只保存了 m3u8，或分片顺序 / 封装方式不对 | 按清单顺序拼接分片，再用 ffmpeg `-c copy -movflags +faststart` 封装 MP4 |
 | HLS 队列进度一直不动 | 分片响应没有 `content-length` | 使用已完成分片时长 / 清单总时长计算 `DownloadProgress.percent` |
 

@@ -377,6 +377,7 @@ function registerIpc(): void {
               ? record.audioUrl
               : undefined,
           audioMime: typeof record.audioMime === 'string' ? record.audioMime : undefined,
+          isStream: record.isStream === true,
           cookie:
             (isDouyinPageUrl(record.pageUrl)
               ? douyinCookie

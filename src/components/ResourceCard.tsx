@@ -30,6 +30,7 @@ interface ResourceCardProps {
 
 function resourceMeta(resource: MediaResource): string[] {
   const parts: string[] = [resource.extension.toUpperCase()]
+  if (resource.qualityLabel) parts.push(resource.qualityLabel)
   if (resource.width && resource.height) parts.push(`${resource.width}×${resource.height}`)
   if (resource.duration) parts.push(formatDuration(resource.duration))
   if (resource.size) parts.push(formatBytes(resource.size))
@@ -148,6 +149,9 @@ export default function ResourceCard({
         )}
         {resource.isStream && (
           <span className="stream-chip">{hlsDownloadable ? 'HLS · 自动合并' : 'HLS / DASH'}</span>
+        )}
+        {resource.qualityLabel && (
+          <span className="quality-chip">{resource.qualityLabel}</span>
         )}
         {resource.mergeAudio && <span className="audio-merge-chip">+ AUDIO</span>}
         {width && isImage && <span className="dimension-chip">{width}</span>}

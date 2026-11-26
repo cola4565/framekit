@@ -610,7 +610,8 @@ export default function App(): React.JSX.Element {
             kind: resource.kind,
             pageUrl: resource.pageUrl,
             audioUrl: resource.audioUrl,
-            audioMime: resource.audioMime
+            audioMime: resource.audioMime,
+            isStream: resource.isStream
           })),
           targetDirectory
         )

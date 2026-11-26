@@ -50,7 +50,14 @@ export function getDataRoot(): string {
  * （表现为数据目录里多出几百 MB 的 `Microsoft/Edge`）。
  */
 export function buildChildEnv(): NodeJS.ProcessEnv {
-  const temp = app.getPath('temp')
+  // 冒烟测试在没有 Electron 运行时的情况下会直接调用这个函数，
+  // 此时拿不到 app.getPath，退回系统默认临时目录即可。
+  let temp = process.env.TEMP || process.env.TMP
+  try {
+    temp = app.getPath('temp')
+  } catch {
+    // 保留系统默认值。
+  }
   return { ...process.env, TEMP: temp, TMP: temp }
 }
 

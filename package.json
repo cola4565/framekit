@@ -1,6 +1,6 @@
 {
   "name": "framekit",
-  "version": "1.3.7",
+  "version": "1.3.8",
   "private": true,
   "description": "FrameKit - a cross-platform toolkit for video editors and post-production artists.",
   "main": "out/main/index.js",
@@ -21,6 +21,8 @@
     "test:github": "tsx scripts/github-fallback-smoke.ts",
     "test:weibo": "tsx scripts/weibo-smoke.ts",
     "test:cctv": "tsx scripts/cctv-smoke.ts",
+    "test:cctv:live": "esbuild scripts/cctv-live-smoke.ts --bundle --platform=node --format=cjs --external:electron --outfile=.tmp/cctv-live-smoke.cjs && electron .tmp/cctv-live-smoke.cjs",
+    "test:cctv:download": "esbuild scripts/cctv-download-smoke.ts --bundle --platform=node --format=cjs --external:electron --external:ffmpeg-static --outfile=.tmp/cctv-download-smoke.cjs && electron .tmp/cctv-download-smoke.cjs",
     "test:deep": "esbuild scripts/deep-smoke.ts --bundle --platform=node --format=cjs --external:electron --outfile=.tmp/deep-smoke.cjs && electron .tmp/deep-smoke.cjs",
     "test:ui": "tsx scripts/ui-smoke.ts",
     "test:download": "tsx scripts/download-smoke.ts",

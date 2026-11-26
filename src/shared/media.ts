@@ -69,11 +69,20 @@ export function lowestQualityVariant(
   all: MediaResource[] | undefined
 ): MediaResource {
   if (!resource.groupId || !all) return resource
-  const siblings = all.filter(
-    (item) => item.groupId === resource.groupId && item.kind === 'video' && item.audioUrl
+  const sameGroup = all.filter(
+    (item) => item.groupId === resource.groupId && item.kind === 'video'
   )
+  // Bilibili / 抖音的每档清晰度都带独立音轨，必须挑有音轨的那一档；
+  // 央视 HLS 已经是音视频合流，这里没有音轨字段，直接按分辨率挑最低档。
+  const needsAudio = sameGroup.some((item) => Boolean(item.audioUrl))
+  const siblings = needsAudio
+    ? sameGroup.filter((item) => Boolean(item.audioUrl))
+    : sameGroup
   if (siblings.length < 2) return resource
   return siblings.reduce((lowest, item) =>
-    (item.height ?? 0) < (lowest.height ?? 0) ? item : lowest
+    (item.height ?? Number.MAX_SAFE_INTEGER) <
+    (lowest.height ?? Number.MAX_SAFE_INTEGER)
+      ? item
+      : lowest
   )
 }
