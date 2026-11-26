@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs'
 import { readdir, rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { app, session } from 'electron'
+import { getDataRoot } from './storage'
 
 const CACHE_NAMES = new Set([
   'cache',
@@ -10,7 +11,9 @@ const CACHE_NAMES = new Set([
   'dawnwebgpucache',
   'gpucache',
   'grshader_cache',
-  'shader_cache'
+  'shader_cache',
+  'cachestorage',
+  'scriptcache'
 ])
 
 async function removeNamedDirectories(root: string, depth = 0): Promise<void> {
@@ -35,7 +38,13 @@ export async function clearRuntimeCaches(): Promise<void> {
     app.getPath('sessionData'),
     join(userData, 'Partitions')
   ])
-  for (const name of ['bilibili', 'douyin', 'aigei']) {
+  // Windows 打包版把缓存路径指向 <dataRoot>/cache；单独加入，
+  // 避免不同 Chromium 版本把部分缓存写到 userData 之外。
+  // 不要用 app.getPath('cache')：实测在 Windows 上会返回 %APPDATA% 根目录，
+  // 递归清理会误删其他应用的 Cache 目录。
+  const dataRoot = getDataRoot()
+  if (dataRoot) roots.add(join(dataRoot, 'cache'))
+  for (const name of ['bilibili', 'douyin', 'aigei', 'weibo']) {
     try {
       const browserSession = session.fromPartition(`persist:${name}`)
       await browserSession.clearCache()

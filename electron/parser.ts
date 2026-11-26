@@ -46,7 +46,8 @@ function warningsAfterDedicatedParse(warnings: string[]): string[] {
       (warning) =>
         !/页面源码中没有发现直链媒体/.test(warning) &&
         !/已继续尝试深度嗅探/.test(warning) &&
-        !/^静态扫描失败：/.test(warning)
+        !/^静态扫描失败：/.test(warning) &&
+        !/^通用提取/.test(warning)
     )
   )
 }
@@ -84,7 +85,8 @@ export async function parsePage(
         if (
           /页面源码中没有发现直链媒体/.test(warning) ||
           /已继续尝试深度嗅探/.test(warning) ||
-          /^静态扫描失败：/.test(warning)
+          /^静态扫描失败：/.test(warning) ||
+          /^通用提取/.test(warning)
         ) {
           return false
         }
@@ -322,7 +324,11 @@ export async function parsePage(
     }
   }
 
-  onProgress({ stage: 'browser', message: '静态扫描完成，准备深度嗅探…', percent: 54 })
+  onProgress({
+    stage: 'browser',
+    message: '未得到专用解析结果，正在尝试通用提取与深度嗅探…',
+    percent: 54
+  })
 
   try {
     const sniffed = await sniffPage(quickResult.finalUrl, onProgress)

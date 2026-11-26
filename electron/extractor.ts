@@ -8,6 +8,7 @@ import type {
   ParseStats,
   ResourceKind
 } from '../src/shared/types'
+import { extractEmbeddedMediaCandidates, type EmbeddedScript } from './generic'
 
 const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36 FrameKit/0.1'
@@ -16,6 +17,8 @@ const PAGE_LIMIT_BYTES = 12 * 1024 * 1024
 const CSS_LIMIT_BYTES = 3 * 1024 * 1024
 const MAX_RESOURCES = 900
 const MAX_CSS_FILES = 8
+const MAX_EMBEDDED_SCRIPT_CHARS = 3 * 1024 * 1024
+const MAX_EMBEDDED_SCRIPT_TOTAL_CHARS = 12 * 1024 * 1024
 
 const IMAGE_EXTENSIONS = new Set([
   'jpg',
@@ -190,6 +193,7 @@ export interface Candidate {
   qualityLabel?: string
   codec?: string
   mergeAudio?: boolean
+  groupId?: string
 }
 
 interface ClassifiedResource {
@@ -405,12 +409,15 @@ export function makeResource(candidate: Candidate, pageUrl: string): MediaResour
     label: candidate.label?.trim() || undefined,
     discoveryLabel: candidate.discoveryLabel,
     isStream: candidate.stream ?? classified.isStream,
-    audioUrl: candidate.audioUrl,
+    audioUrl: candidate.audioUrl
+      ? normalizeUrl(candidate.audioUrl, pageUrl) ?? undefined
+      : undefined,
     audioMime: candidate.audioMime,
     qualityId: candidate.qualityId,
     qualityLabel: candidate.qualityLabel,
     codec: candidate.codec,
-    mergeAudio: candidate.mergeAudio
+    mergeAudio: candidate.mergeAudio,
+    groupId: candidate.groupId
   }
 }
 
@@ -783,8 +790,10 @@ function extractHtmlResources(
   const metadata = buildPageMetadata($)
   const aigei = aigeiPageContext(pageUrl)
   const candidates = new Map<string, Candidate>()
+  const embeddedScripts: EmbeddedScript[] = []
   const warnings: string[] = []
   let aigeiMainPreviewAdded = false
+  let embeddedScriptChars = 0
 
   const addCandidate = (
     candidate: Omit<Candidate, 'source' | 'discoveryLabel'> & {
@@ -817,7 +826,14 @@ function extractHtmlResources(
       height: existing.height ?? next.height,
       duration: existing.duration ?? next.duration,
       poster: existing.poster ?? next.poster,
-      stream: existing.stream ?? next.stream
+      stream: existing.stream ?? next.stream,
+      audioUrl: existing.audioUrl ?? next.audioUrl,
+      audioMime: existing.audioMime ?? next.audioMime,
+      qualityId: existing.qualityId ?? next.qualityId,
+      qualityLabel: existing.qualityLabel ?? next.qualityLabel,
+      codec: existing.codec ?? next.codec,
+      mergeAudio: existing.mergeAudio ?? next.mergeAudio,
+      groupId: existing.groupId ?? next.groupId
     })
   }
 
@@ -1117,6 +1133,18 @@ function extractHtmlResources(
       return
     }
     if (attrs.src || type.includes('template') || type.includes('text/html')) return
+    if (
+      scriptText.length >= 8 &&
+      scriptText.length <= MAX_EMBEDDED_SCRIPT_CHARS &&
+      embeddedScriptChars + scriptText.length <= MAX_EMBEDDED_SCRIPT_TOTAL_CHARS
+    ) {
+      embeddedScripts.push({
+        type,
+        id: attrs.id,
+        text: scriptText
+      })
+      embeddedScriptChars += scriptText.length
+    }
     for (const rawUrl of extractMediaUrlsFromScript(scriptText)) {
       const resolved = normalizeUrl(rawUrl, pageUrl)
       if (!resolved) continue
@@ -1131,6 +1159,41 @@ function extractHtmlResources(
       })
     }
   })
+
+  if (embeddedScripts.length > 0) {
+    const embedded = extractEmbeddedMediaCandidates(embeddedScripts, {
+      pageUrl,
+      baseUrl: pageUrl,
+      discoveryLabel: '通用提取 · 页面内嵌状态',
+      source: 'script'
+    })
+    for (const candidate of embedded.candidates) {
+      addCandidate({
+        url: candidate.url,
+        hint: candidate.hint,
+        source: candidate.source,
+        discoveryLabel: candidate.discoveryLabel,
+        label: candidate.label,
+        mime: candidate.mime,
+        size: candidate.size,
+        width: candidate.width,
+        height: candidate.height,
+        duration: candidate.duration,
+        poster: candidate.poster,
+        audioUrl: candidate.audioUrl,
+        audioMime: candidate.audioMime,
+        qualityId: candidate.qualityId,
+        qualityLabel: candidate.qualityLabel,
+        groupId: candidate.groupId
+      })
+    }
+    if (embedded.candidates.length > 0) {
+      warnings.push(
+        `通用提取：从页面内嵌 JSON 中发现 ${embedded.candidates.length} 项媒体，属于启发式结果，可能包含推荐位或广告资源。`
+      )
+    }
+    warnings.push(...embedded.warnings)
+  }
 
   const stylesheetUrls: string[] = []
   const skipStylesheets =

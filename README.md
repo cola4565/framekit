@@ -4,7 +4,7 @@
 
 支持 Windows 与 macOS，基于 Electron + React + TypeScript 构建，解析与下载全部在本机完成。
 
-当前正式版：**v1.3.8**
+当前正式版：**v1.3.9**
 
 ![FrameKit 素材解析界面](docs/screenshot-results.png)
 
@@ -12,9 +12,9 @@
 
 ## 下载
 
-- [FrameKit 1.3.8 · Windows x64 安装包](https://github.com/cola4565/framekit/releases/download/v1.3.8/FrameKit-1.3.8-Windows-x64.exe)
-- [FrameKit 1.3.8 · macOS Apple Silicon](https://github.com/cola4565/framekit/releases/download/v1.3.8/FrameKit-1.3.8-macOS-arm64.dmg)
-- [FrameKit 1.3.8 · macOS Intel](https://github.com/cola4565/framekit/releases/download/v1.3.8/FrameKit-1.3.8-macOS-x64.dmg)
+- [FrameKit 1.3.9 · Windows x64 安装包](https://github.com/cola4565/framekit/releases/download/v1.3.9/FrameKit-1.3.9-Windows-x64.exe)
+- [FrameKit 1.3.9 · macOS Apple Silicon](https://github.com/cola4565/framekit/releases/download/v1.3.9/FrameKit-1.3.9-macOS-arm64.dmg)
+- [FrameKit 1.3.9 · macOS Intel](https://github.com/cola4565/framekit/releases/download/v1.3.9/FrameKit-1.3.9-macOS-x64.dmg)
 - [全部版本与更新说明](https://github.com/cola4565/framekit/releases)
 
 Windows 首次安装可以选择安装盘和目录，默认装到 `%LOCALAPPDATA%\Programs\framekit`，也支持 `D:\FrameKit` 等位置；之后可直接在应用内静默更新。从 1.2.0 及更早版本升级需要手动安装一次。macOS 安装包暂未配置 Apple 开发者签名与公证，首次运行时系统可能提示未知开发者；macOS 的应用内静默安装也要等签名配置完成后启用。
@@ -24,7 +24,8 @@ Windows 卸载时会删除下载记录、登录态、设置和所有缓存，只
 ## 当前能力
 
 - **快速扫描**：读取页面 HTML，解析 `img`、`srcset`、`picture`、`video`、`audio`、`a`、`link`、Open Graph、Twitter Card、JSON-LD、内联脚本与 CSS 背景图。
-- **深度嗅探**：启动隐藏的内置浏览器执行页面脚本、滚动触发懒加载，并监听真实网络请求，捕获动态插入的图片、音视频、HLS/DASH 清单和脚本请求资源。
+- **通用提取层**：除专用站点适配器外，还会从页面内嵌状态（`__INITIAL_STATE__`、`__NEXT_DATA__`、`playerVars` 等）、接口 JSON 和运行时全局对象里递归查找媒体地址；能识别 `videoUrl` + `audioUrl` 这类分离音视频，并把 HLS master 清单展开成可选清晰度。结果会标注为“通用提取”，属于启发式兜底，可能包含推荐位或广告，下载前请核对。
+- **深度嗅探**：启动隐藏的内置浏览器执行页面脚本、滚动触发懒加载，监听真实网络请求，并通过调试协议读取 XHR/Fetch 的 JSON 响应体，捕获动态插入的图片、音视频、HLS/DASH 清单和脚本请求资源。
 - **统一资源库**：按图片、视频、音频、其他分类；支持搜索、筛选、尺寸/时长/体积/MIME 展示。
 - **内置预览**：图片、视频、音频和流媒体清单说明；支持复制直链和浏览器打开。Bilibili 多清晰度资源预览时自动使用最低清晰度，下载仍按你选择的清晰度执行。
 - **视频封面**：页面没有封面图时，自动从视频首帧抽取封面显示在资源卡片和预览弹窗里；直链无法直接播放时也能先看到画面再决定要不要下载，不用下载完才发现内容不对。
@@ -87,7 +88,9 @@ Windows 卸载时会删除下载记录、登录态、设置和所有缓存，只
 深度嗅探使用独立的临时浏览器会话，通常需要 5–15 秒：
 
 - 会执行页面脚本并滚动页面，触发懒加载内容。
-- 会监听图片、媒体与脚本发起的网络请求。
+- 会监听图片、媒体与脚本发起的网络请求，并读取接口返回的 JSON 里的媒体地址。
+- 会扫描页面运行时状态对象（如播放器配置），并自动展开 HLS master 清单的清晰度。
+- 通用提取是启发式兜底；未适配站点如果仍没有结果，说明接口需要登录、验证码、加密流或专用签名，当前版本不会绕过这些限制。
 - 不共享你日常浏览器的登录状态；需要登录才能看到的资源，当前版本无法直接读取。
 - 不会绕过 DRM、付费墙或站点访问控制。
 
@@ -97,7 +100,7 @@ Windows 卸载时会删除下载记录、登录态、设置和所有缓存，只
 | --- | --- |
 | 常规图片 | 支持 `<img>`、`srcset`、懒加载属性、CSS 背景、OG/Twitter、JSON-LD、脚本内 URL |
 | 常规音视频 | 支持 `<video>`、`<audio>`、`<source>`、直链、网络请求捕获；没有封面时自动抽取视频首帧作为封面 |
-| HLS / DASH | 能识别 `.m3u8` / `.mpd` 清单；Bilibili DASH 已支持下载后自动合并音视频，其他站点的分片合并尚未支持 |
+| HLS / DASH | 通用提取会自动展开 HLS master 清晰度；Bilibili DASH 已支持下载后自动合并音视频；通用 DASH `.mpd` 目前只识别、不下载 |
 | 防盗链资源 | Bilibili 直链已处理 Referer / Range / Cookie；其他站点仍可能拒绝 |
 | 登录后资源 | 深度嗅探使用独立会话，不继承浏览器登录状态 |
 | Bilibili | 已内置专用解析，支持登录、清晰度选择与音视频自动合并 |
@@ -138,6 +141,9 @@ npm run test:update
 
 # 动态资源嗅探（需要 Electron 图形环境）
 npm run test:deep
+
+# 通用提取：内嵌 JSON、CDP 接口响应、运行时对象与 HLS 清晰度展开
+npm run test:generic
 
 # 真实 Bilibili 解析 + 下载 + 音视频合并校验（需要网络，可能需登录）
 npm run test:bilibili

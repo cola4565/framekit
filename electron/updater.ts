@@ -1,5 +1,6 @@
 import { app, session } from 'electron'
 import { autoUpdater } from 'electron-updater'
+import { readdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { UpdateCheckResult, UpdateDownloadState } from '../src/shared/types'
 import { isNewerVersion, normalizeVersion } from '../src/shared/version'
@@ -63,6 +64,26 @@ function redirectUpdaterCachePath(): void {
     configurable: true,
     get: () => updaterCachePath()
   })
+}
+
+/**
+ * 清理上一次运行留下的更新包缓存。
+ *
+ * electron-updater 会把安装包与 blockmap 留在 `<baseCachePath>/<name>-updater/pending`；
+ * 成功更新后旧文件不会自动消失，单个安装包就有上百 MB。启动时还没有下载任务，
+ * 清空 pending 最安全；如果用户上次下载后直接退出，重新下载即可，换来的是磁盘不长期占着旧包。
+ * 注意不要放进 `clearRuntimeCaches()`：退出安装更新时它也会执行，会删掉正在安装的包。
+ */
+export async function pruneUpdaterCache(): Promise<void> {
+  const base = updaterCachePath()
+  if (!base) return
+  const entries = await readdir(base, { withFileTypes: true }).catch(() => [])
+  for (const entry of entries) {
+    if (!entry.isDirectory() || !entry.name.toLowerCase().endsWith('-updater')) continue
+    await rm(join(base, entry.name, 'pending'), { recursive: true, force: true }).catch(
+      () => undefined
+    )
+  }
 }
 
 interface GithubReleaseAsset {

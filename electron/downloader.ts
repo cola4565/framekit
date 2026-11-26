@@ -15,6 +15,7 @@ import { bestHlsVariant, isHlsUrl, parseHlsMaster, parseHlsMedia } from './hls'
 import { buildChildEnv } from './storage'
 
 const CONCURRENCY = 3
+const MAX_RETAINED_TASKS = 300
 const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36 FrameKit/0.1'
 const FFMPEG_PATH = (() => {
@@ -97,6 +98,13 @@ function ensureExtension(
   const extension =
     MIME_EXTENSION[mime ?? ''] ?? (kind === 'image' ? 'jpg' : kind === 'video' ? 'mp4' : kind === 'audio' ? 'mp3' : 'bin')
   return `${sanitized}.${extension}`
+}
+
+function mp4OutputName(filename: string): string {
+  return ensureExtension(filename, 'video/mp4', 'video').replace(
+    /\.(?:m4s|m2ts|mts|ts|m3u8|mpd|webm|flv|mkv)$/i,
+    '.mp4'
+  )
 }
 
 function availablePath(destination: string, filename: string, reserved: Set<string>): string {
@@ -296,6 +304,7 @@ export class DownloadManager {
     }
 
     this.pump()
+    this.pruneFinishedTasks()
     return { queued, destination: absoluteDestination }
   }
 
@@ -362,9 +371,26 @@ export class DownloadManager {
       const running = this.run(task).finally(() => {
         this.activeIds.delete(task.request.id)
         this.running.delete(task.request.id)
+        this.pruneFinishedTasks()
         this.pump()
       })
       this.running.set(task.request.id, running)
+    }
+  }
+
+  /**
+   * 终态任务只保留最近 300 条，避免长时间运行时 tasks Map 无限增长。
+   * 磁盘历史另有 200 条上限；删除记录/定位文件都会回退到历史记录。
+   */
+  private pruneFinishedTasks(): void {
+    if (this.tasks.size <= MAX_RETAINED_TASKS) return
+    for (const [id, task] of this.tasks) {
+      if (this.tasks.size <= MAX_RETAINED_TASKS) break
+      if (['queued', 'downloading'].includes(task.status)) continue
+      // availablePath() 把占用的文件名放进 reservedPaths；淘汰任务时必须同步释放，
+      // 否则长会话里集合只增不减，重复下载还会被无谓地改名。
+      if (task.filePath) this.reservedPaths.delete(task.filePath.toLowerCase())
+      this.tasks.delete(id)
     }
   }
 
@@ -573,7 +599,7 @@ export class DownloadManager {
   private async runMerged(task: DownloadTask): Promise<void> {
     const finalPath = availablePath(
       task.destination,
-      ensureExtension(task.request.filename, 'video/mp4', 'video'),
+      mp4OutputName(task.request.filename),
       this.reservedPaths
     )
     task.filePath = finalPath
@@ -708,7 +734,7 @@ export class DownloadManager {
   private async runHls(task: DownloadTask): Promise<void> {
     const finalPath = availablePath(
       task.destination,
-      ensureExtension(task.request.filename, 'video/mp4', 'video'),
+      mp4OutputName(task.request.filename),
       this.reservedPaths
     )
     task.filePath = finalPath

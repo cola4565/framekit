@@ -45,7 +45,8 @@ import {
   checkForUpdates,
   downloadUpdate,
   initializeUpdater,
-  installUpdate
+  installUpdate,
+  pruneUpdaterCache
 } from './updater'
 import { getUpdateSettings, saveUpdateSettings } from './update-settings'
 
@@ -480,6 +481,7 @@ if (!hasLock) {
     installMediaProtocol()
     await installThumbnailProtocol()
     await downloadHistory.load()
+    await pruneUpdaterCache()
     buildMenu()
     registerIpc()
     createWindow()

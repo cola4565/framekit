@@ -54,6 +54,7 @@ interface ToastState {
 }
 
 const SAVE_PATH_KEY = 'framekit.destination'
+const MAX_DOWNLOAD_ITEMS = 300
 const PROGRESS_STEPS = [
   { label: '连接', threshold: 8 },
   { label: '解析', threshold: 28 },
@@ -67,6 +68,18 @@ function readSavedPath(): string {
   } catch {
     return ''
   }
+}
+
+function trimDownloads(items: DownloadProgress[]): DownloadProgress[] {
+  if (items.length <= MAX_DOWNLOAD_ITEMS) return items
+  const active = new Set(
+    items.filter((task) => task.status === 'queued' || task.status === 'downloading')
+  )
+  const finished = items
+    .filter((task) => !active.has(task))
+    .slice(0, Math.max(0, MAX_DOWNLOAD_ITEMS - active.size))
+  const keep = new Set([...active, ...finished])
+  return items.filter((task) => keep.has(task))
 }
 
 function errorMessage(error: unknown): string {
@@ -278,10 +291,10 @@ export default function App(): React.JSX.Element {
       if (removedDownloadIds.current.has(nextProgress.id)) return
       setDownloads((current) => {
         const index = current.findIndex((task) => task.id === nextProgress.id)
-        if (index === -1) return [nextProgress, ...current]
+        if (index === -1) return trimDownloads([nextProgress, ...current])
         const updated = [...current]
         updated[index] = nextProgress
-        return updated
+        return trimDownloads(updated)
       })
     })
   }, [])
@@ -316,7 +329,7 @@ export default function App(): React.JSX.Element {
           const restored = history.filter(
             (task) => !known.has(task.id) && !removedDownloadIds.current.has(task.id)
           )
-          return [...current, ...restored]
+          return trimDownloads([...current, ...restored])
         })
       })
       .catch(() => undefined)

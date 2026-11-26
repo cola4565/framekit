@@ -98,6 +98,7 @@ export default function ResourceCard({
             src={posterUrl ?? coverUrl}
             alt=""
             loading="lazy"
+            decoding="async"
             referrerPolicy="no-referrer"
             onLoad={() => setCoverLoading(false)}
             onError={() => {
@@ -172,7 +173,10 @@ export default function ResourceCard({
         <div className="resource-foot">
           <span className={`source-dot source-${resource.source}`} />
           <span className="resource-source" title={resource.discoveryLabel}>
-            {sourceMeta[resource.source]} · {hostOf(resource.url)}
+            {resource.discoveryLabel.startsWith('通用提取')
+              ? '通用提取'
+              : sourceMeta[resource.source]}{' '}
+            · {hostOf(resource.url)}
           </span>
           {resource.mime && <span className="mime-tag">{resource.mime}</span>}
         </div>
